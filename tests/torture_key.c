@@ -318,6 +318,8 @@ static const char *torture_get_testkey_internal(enum ssh_keytypes_e type,
                 return torture_dsa_private_testkey_passphrase;
             }
             return torture_dsa_private_testkey;
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_RSA:
             if (pubkey) {
                 return torture_rsa_public_testkey;

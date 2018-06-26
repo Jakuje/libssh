@@ -205,6 +205,8 @@ const char *ssh_key_type_to_char(enum ssh_keytypes_e type) {
     case SSH_KEYTYPE_DSS:
       return "ssh-dss";
     case SSH_KEYTYPE_RSA:
+    case SSH_KEYTYPE_RSA_SHA256:
+    case SSH_KEYTYPE_RSA_SHA512:
       return "ssh-rsa";
     case SSH_KEYTYPE_ECDSA:
       return "ssh-ecdsa";
@@ -224,6 +226,58 @@ const char *ssh_key_type_to_char(enum ssh_keytypes_e type) {
 }
 
 /**
+ * @brief Convert a key type to a pubkey algorithm type. This is usually
+ * the same as public key type, unless the SHA2 extension (RFC 8332) is
+ * negotiated during key exchange
+ *
+ * @param[in]  session  SSH Session.
+ * @param[in]  type     The type to convert.
+ *
+ * @return              A public key algorithm to be used.
+ */
+enum ssh_keytypes_e ssh_key_type_to_alg(ssh_session session,
+                                        enum ssh_keytypes_e type)
+{
+  /* TODO this should also reflect supported key types specified in
+   * configuration (ssh_config PubkeyAcceptedKeyTypes) */
+  switch (type) {
+    case SSH_KEYTYPE_RSA:
+      if (session->extensions & SSH_EXT_SIG_RSA_SHA512)
+        return SSH_KEYTYPE_RSA_SHA512;
+      if (session->extensions & SSH_EXT_SIG_RSA_SHA256)
+        return SSH_KEYTYPE_RSA_SHA256;
+      FALL_THROUGH;
+    default:
+      return type;
+  }
+
+  /* We should never reach this */
+  return SSH_KEYTYPE_UNKNOWN;
+}
+
+/**
+ * @brief Convert a ssh key algorithm name to a ssh key algorithm type.
+ *
+ * @param[in] name      The name to convert.
+ *
+ * @return              The enum ssh key algorithm type.
+ */
+static enum ssh_keytypes_e ssh_key_algorithm_type_from_name(const char *name) {
+    if (name == NULL) {
+        return SSH_KEYTYPE_UNKNOWN;
+    }
+
+    if (strcmp(name, "rsa-sha2-256") == 0) {
+        return SSH_KEYTYPE_RSA_SHA256;
+    } else if (strcmp(name, "rsa-sha2-512") == 0) {
+        return SSH_KEYTYPE_RSA_SHA512;
+    }
+
+    /* Otherwise the sig algorithem matches the key type */
+    return ssh_key_type_from_name(name);
+}
+
+/**
  * @brief Convert a ssh key name to a ssh key type.
  *
  * @param[in] name      The name to convert.
@@ -239,7 +293,9 @@ enum ssh_keytypes_e ssh_key_type_from_name(const char *name) {
         return SSH_KEYTYPE_RSA;
     } else if (strcmp(name, "dsa") == 0) {
         return SSH_KEYTYPE_DSS;
-    } else if (strcmp(name, "ssh-rsa") == 0) {
+    } else if (strcmp(name, "ssh-rsa") == 0
+            || strcmp(name, "rsa-sha2-256") == 0
+            || strcmp(name, "rsa-sha2-512") == 0) {
         return SSH_KEYTYPE_RSA;
     } else if (strcmp(name, "ssh-dss") == 0) {
         return SSH_KEYTYPE_DSS;
@@ -356,6 +412,8 @@ void ssh_signature_free(ssh_signature sig)
 #endif
             break;
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
 #ifdef HAVE_LIBGCRYPT
             gcry_sexp_release(sig->rsa_sig);
 #elif defined HAVE_LIBCRYPTO
@@ -1534,7 +1592,7 @@ int ssh_pki_import_signature_blob(const ssh_string sig_blob,
         return SSH_ERROR;
     }
 
-    type = ssh_key_type_from_name(ssh_string_get_char(str));
+    type = ssh_key_algorithm_type_from_name(ssh_string_get_char(str));
     ssh_string_free(str);
 
     str = ssh_buffer_get_ssh_string(buf);
@@ -1593,22 +1651,40 @@ int ssh_pki_signature_verify_blob(ssh_session session,
     } else if (key->type == SSH_KEYTYPE_ED25519) {
         rc = pki_signature_verify(session, sig, key, digest, dlen);
     } else {
-        unsigned char hash[SHA_DIGEST_LEN] = {0};
+        unsigned char hash[SHA512_DIGEST_LEN] = {0};
+        uint32_t hlen = 0;
 
-        sha1(digest, dlen, hash);
+        switch (sig->type) {
+        case SSH_KEYTYPE_RSA_SHA256:
+            sha256(digest, dlen, hash);
+            hlen = SHA256_DIGEST_LEN;
+            break;
+        case SSH_KEYTYPE_RSA_SHA512:
+            sha512(digest, dlen, hash);
+            hlen = SHA512_DIGEST_LEN;
+            break;
+        case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_DSS:
+            sha1(digest, dlen, hash);
+            hlen = SHA_DIGEST_LEN;
+            break;
+        default:
+            SSH_LOG(SSH_LOG_TRACE, "Unknown sig->type: %d", sig->type);
+            return SSH_ERROR;
+        }
 #ifdef DEBUG_CRYPTO
         ssh_print_hexa(key->type == SSH_KEYTYPE_DSS
                        ? "Hash to be verified with DSA"
                        : "Hash to be verified with RSA",
                        hash,
-                       SHA_DIGEST_LEN);
+                       hlen);
 #endif
 
         rc = pki_signature_verify(session,
                                   sig,
                                   key,
                                   hash,
-                                  SHA_DIGEST_LEN);
+                                  hlen);
     }
 
     ssh_signature_free(sig);
