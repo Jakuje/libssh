@@ -96,6 +96,10 @@ int pki_signature_verify(ssh_session session,
 ssh_signature pki_do_sign(const ssh_key privkey,
                           const unsigned char *hash,
                           size_t hlen);
+ssh_signature pki_do_sign_alg(const ssh_key privkey,
+                              const unsigned char *hash,
+                              size_t hlen,
+                              enum ssh_keytypes_e algorithm);
 ssh_signature pki_do_sign_sessionid(const ssh_key key,
                                     const unsigned char *hash,
                                     size_t hlen);

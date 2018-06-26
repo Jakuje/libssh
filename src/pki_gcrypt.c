@@ -2090,17 +2090,32 @@ int pki_signature_verify(ssh_session session,
 
 ssh_signature pki_do_sign(const ssh_key privkey,
                           const unsigned char *hash,
-                          size_t hlen) {
+                          size_t hlen)
+{
+    return pki_do_sign_alg(privkey, hash, hlen, privkey->type);
+}
+
+ssh_signature pki_do_sign_alg(const ssh_key privkey,
+                              const unsigned char *hash,
+                              size_t hlen,
+                              enum ssh_keytypes_e algorithm)
+{
     unsigned char ghash[hlen + 1];
+    const char *hash_type = NULL;
     ssh_signature sig;
     gcry_sexp_t sexp;
     gcry_error_t err;
+
+    /* Only RSA supports different signature algorithm types now */
+    if (privkey->type != algorithm && privkey->type != SSH_KEYTYPE_RSA) {
+        return NULL;
+    }
 
     sig = ssh_signature_new();
     if (sig == NULL) {
         return NULL;
     }
-    sig->type = privkey->type;
+    sig->type = algorithm;
     sig->type_c = privkey->type_c;
     switch (privkey->type) {
         case SSH_KEYTYPE_DSS:
@@ -2126,9 +2141,27 @@ ssh_signature pki_do_sign(const ssh_key privkey,
             }
             break;
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
+            sig->type_c = ssh_key_alg_to_char(algorithm);
+            switch (algorithm) {
+            case SSH_KEYTYPE_RSA:
+                hash_type = "sha1";
+                break;
+            case SSH_KEYTYPE_RSA_SHA256:
+                hash_type = "sha256";
+                break;
+            case SSH_KEYTYPE_RSA_SHA512:
+                hash_type = "sha512";
+                break;
+            default:
+                SSH_LOG(SSH_LOG_WARN, "Incomplatible key algorithm");
+                return NULL;
+            }
             err = gcry_sexp_build(&sexp,
                                   NULL,
-                                  "(data(flags pkcs1)(hash sha1 %b))",
+                                  "(data(flags pkcs1)(hash %s %b))",
+                                  hash_type,
                                   hlen,
                                   hash);
             if (err) {
@@ -2220,6 +2253,8 @@ ssh_signature pki_do_sign_sessionid(const ssh_key key,
             }
             break;
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
             err = gcry_sexp_build(&sexp,
                                   NULL,
                                   "(data(flags pkcs1)(hash sha1 %b))",
