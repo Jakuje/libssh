@@ -80,6 +80,8 @@ enum ssh_keytypes_e pki_privatekey_type_from_string(const char *privkey) {
     return SSH_KEYTYPE_UNKNOWN;
 }
 
+extern const char *default_methods[];
+
 /**
  * @brief returns the ECDSA key name ("ecdsa-sha2-nistp256" for example)
  *
@@ -247,6 +249,26 @@ const char *ssh_key_type_to_char(enum ssh_keytypes_e type) {
 }
 
 /**
+ * @brief Checks the given key against the configured allowed
+ * public key algorithm types
+ *
+ * @param[in] session The SSH session
+ * @parma[in] type    The key algorithm to check
+ * @returns           1 if the key algorithm is allowed 0 otherwise
+ */
+int ssh_key_algorithm_allowed(ssh_session session, const char *type)
+{
+    const char *allowed_list;
+
+    allowed_list = session->opts.pubkey_accepted_types;
+    if (allowed_list == NULL)
+        allowed_list = default_methods[SSH_HOSTKEYS];
+
+    SSH_LOG(SSH_LOG_DEBUG, "Checking %s with list <%s>", type, allowed_list);
+    return ssh_match_group(allowed_list, type);
+}
+
+/**
  * @brief Convert a key type to a pubkey algorithm type. This is usually
  * the same as public key type, unless the SHA2 extension (RFC 8332) is
  * negotiated during key exchange
@@ -259,21 +281,21 @@ const char *ssh_key_type_to_char(enum ssh_keytypes_e type) {
 enum ssh_keytypes_e ssh_key_type_to_alg(ssh_session session,
                                         enum ssh_keytypes_e type)
 {
-  /* TODO this should also reflect supported key types specified in
-   * configuration (ssh_config PubkeyAcceptedKeyTypes) */
-  switch (type) {
+    switch (type) {
     case SSH_KEYTYPE_RSA:
-      if (session->extensions & SSH_EXT_SIG_RSA_SHA512)
-        return SSH_KEYTYPE_RSA_SHA512;
-      if (session->extensions & SSH_EXT_SIG_RSA_SHA256)
-        return SSH_KEYTYPE_RSA_SHA256;
-      FALL_THROUGH;
+        if (ssh_key_algorithm_allowed(session, "rsa-sha2-512")
+          && (session->extensions & SSH_EXT_SIG_RSA_SHA512))
+            return SSH_KEYTYPE_RSA_SHA512;
+        if (ssh_key_algorithm_allowed(session, "rsa-sha2-256")
+          && (session->extensions & SSH_EXT_SIG_RSA_SHA256))
+            return SSH_KEYTYPE_RSA_SHA256;
+        FALL_THROUGH;
     default:
-      return type;
-  }
+        /* Other key types match the signature algorithm */
+        return type;
+    }
 
-  /* We should never reach this */
-  return SSH_KEYTYPE_UNKNOWN;
+    return SSH_KEYTYPE_UNKNOWN;
 }
 
 /**
