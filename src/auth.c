@@ -456,6 +456,18 @@ int ssh_userauth_try_publickey(ssh_session session,
             return SSH_ERROR;
     }
 
+    sig_type = ssh_key_type_to_alg(session, pubkey->type);
+    sig_type_c = ssh_key_alg_to_char(sig_type);
+
+    /* Check if the given public key algorithm is allowed */
+    if (!ssh_key_algorithm_allowed(session, sig_type_c)) {
+        ssh_set_error(session, SSH_REQUEST_DENIED,
+                      "The key algorithm %s is not allowed to be used by"
+                      " PubkeyAcceptedKeyTypes configuration option",
+                      sig_type_c);
+        return SSH_AUTH_DENIED;
+    }
+
     rc = ssh_userauth_request_service(session);
     if (rc == SSH_AGAIN) {
         return SSH_AUTH_AGAIN;
@@ -468,9 +480,6 @@ int ssh_userauth_try_publickey(ssh_session session,
     if (rc < 0) {
         goto fail;
     }
-    sig_type = ssh_key_type_to_alg(session, pubkey->type);
-    sig_type_c = ssh_key_alg_to_char(sig_type);
-
     /* request */
     rc = ssh_buffer_pack(session->out_buffer, "bsssbsS",
             SSH2_MSG_USERAUTH_REQUEST,
@@ -538,7 +547,7 @@ int ssh_userauth_publickey(ssh_session session,
 {
     ssh_string str = NULL;
     int rc;
-    const char *type_c;
+    const char *sig_type_c;
     enum ssh_keytypes_e key_type, sig_type;
 
     if (session == NULL) {
@@ -562,17 +571,26 @@ int ssh_userauth_publickey(ssh_session session,
             return SSH_AUTH_ERROR;
     }
 
+    /* Cert auth requires presenting the cert type name (*-cert@openssh.com) */
+    key_type = privkey->cert != NULL ? privkey->cert_type : privkey->type;
+    sig_type = ssh_key_type_to_alg(session, key_type);
+    sig_type_c = ssh_key_alg_to_char(sig_type);
+
+    /* Check if the given public key algorithm is allowed */
+    if (!ssh_key_algorithm_allowed(session, sig_type_c)) {
+        ssh_set_error(session, SSH_REQUEST_DENIED,
+                      "The key algorithm %s is not allowed to be used by"
+                      " PubkeyAcceptedKeyTypes configuration option",
+                      sig_type_c);
+        return SSH_AUTH_DENIED;
+    }
+
     rc = ssh_userauth_request_service(session);
     if (rc == SSH_AGAIN) {
         return SSH_AUTH_AGAIN;
     } else if (rc == SSH_ERROR) {
         return SSH_AUTH_ERROR;
     }
-
-    /* Cert auth requires presenting the cert type name (*-cert@openssh.com) */
-    key_type = privkey->cert != NULL ? privkey->cert_type : privkey->type;
-    sig_type = ssh_key_type_to_alg(session, key_type);
-    type_c = ssh_key_alg_to_char(sig_type);
 
     /* get public key or cert */
     rc = ssh_pki_export_pubkey_blob(privkey, &str);
@@ -587,7 +605,7 @@ int ssh_userauth_publickey(ssh_session session,
             "ssh-connection",
             "publickey",
             1, /* private key */
-            type_c, /* algo */
+            sig_type_c, /* algo */
             str /* public key or cert */
             );
     if (rc < 0) {
