@@ -511,6 +511,22 @@ SSH_PACKET_CALLBACK(ssh_packet_kexinit){
         }
 
         /*
+         * If client sent a ext-info-c message in the kex list, it supports
+         * RFC 8308 extension negotiation.
+         */
+        rc = ssh_match_group(session->next_crypto->client_kex.methods[SSH_KEX],
+                             KEX_EXTENSION_CLIENT);
+        if (rc == 1) {
+            /*
+             * Enable all the supported extensions and when the time comes
+             * (after NEWKEYS) send them to the client.
+             */
+            SSH_LOG(SSH_LOG_DEBUG, "The client supports extension "
+                    "negotiation: enabling all extensions");
+            session->extensions = SSH_EXT_ALL;
+        }
+
+        /*
          * Remember whether 'first_kex_packet_follows' was set and the client
          * guess was wrong: in this case the next SSH_MSG_KEXDH_INIT message
          * must be ignored.
