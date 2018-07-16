@@ -708,6 +708,8 @@ ssh_string pki_signature_to_blob(const ssh_signature sig)
 
     switch(sig->type) {
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
             sig_blob = ssh_string_copy(sig->rsa_sig);
             break;
         case SSH_KEYTYPE_ECDSA: {
@@ -842,6 +844,8 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey, const ssh_string
 
     switch(type) {
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
             sig = pki_signature_from_rsa_blob(pubkey, sig_blob, sig);
             break;
         case SSH_KEYTYPE_ECDSA: {
@@ -931,10 +935,31 @@ int pki_signature_verify(ssh_session session, const ssh_signature sig, const
         ssh_key key, const unsigned char *hash, size_t hlen)
 {
     int rc;
+    mbedtls_md_type_t md = 0;
 
     switch (key->type) {
         case SSH_KEYTYPE_RSA:
-            rc = mbedtls_pk_verify(key->rsa, MBEDTLS_MD_SHA1, hash, hlen,
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
+            switch (sig->type) {
+            case SSH_KEYTYPE_RSA:
+                md = MBEDTLS_MD_SHA1;
+                break;
+            case SSH_KEYTYPE_RSA_SHA256:
+                md = MBEDTLS_MD_SHA256;
+                break;
+            case SSH_KEYTYPE_RSA_SHA512:
+                md = MBEDTLS_MD_SHA512;
+                break;
+            default:
+                SSH_LOG(SSH_LOG_TRACE, "Unknown sig type %d", sig->type);
+                ssh_set_error(session,
+                              SSH_FATAL,
+                              "Unexpected signature type %s during RSA verify",
+                              sig->type_c);
+                return SSH_ERROR;
+            }
+            rc = mbedtls_pk_verify(key->rsa, md, hash, hlen,
                     ssh_string_data(sig->rsa_sig),
                     ssh_string_len(sig->rsa_sig));
             if (rc != 0) {
@@ -971,20 +996,36 @@ int pki_signature_verify(ssh_session session, const ssh_signature sig, const
     return SSH_OK;
 }
 
-static ssh_string rsa_do_sign(const unsigned char *digest, int dlen,
-        mbedtls_pk_context *privkey)
+static ssh_string rsa_do_sign_alg(const unsigned char *digest, int dlen,
+        mbedtls_pk_context *privkey, enum ssh_keytypes_e algorithm)
 {
     ssh_string sig_blob = NULL;
+    mbedtls_md_type_t md = 0;
     unsigned char *sig = NULL;
     size_t slen;
     int ok;
+
+    switch (algorithm) {
+    case SSH_KEYTYPE_RSA:
+        md = MBEDTLS_MD_SHA1;
+        break;
+    case SSH_KEYTYPE_RSA_SHA256:
+        md = MBEDTLS_MD_SHA256;
+        break;
+    case SSH_KEYTYPE_RSA_SHA512:
+        md = MBEDTLS_MD_SHA512;
+        break;
+    default:
+        SSH_LOG(SSH_LOG_WARN, "Incomplatible key algorithm");
+        return NULL;
+    }
 
     sig = malloc(mbedtls_pk_get_bitlen(privkey) / 8);
     if (sig == NULL) {
         return NULL;
     }
 
-    ok = mbedtls_pk_sign(privkey, MBEDTLS_MD_SHA1, digest, dlen, sig, &slen,
+    ok = mbedtls_pk_sign(privkey, md, digest, dlen, sig, &slen,
             mbedtls_ctr_drbg_random, &ssh_mbedtls_ctr_drbg);
 
     if (ok != 0) {
@@ -1009,20 +1050,37 @@ static ssh_string rsa_do_sign(const unsigned char *digest, int dlen,
 ssh_signature pki_do_sign(const ssh_key privkey, const unsigned char *hash,
         size_t hlen)
 {
+    return pki_do_sign_alg(privkey, hash, hlen, privkey->type);
+}
+
+ssh_signature pki_do_sign_alg(const ssh_key privkey,
+                              const unsigned char *hash,
+                              size_t hlen,
+                              enum ssh_keytypes_e algorithm)
+{
     ssh_signature sig = NULL;
     int rc;
+
+    /* Only RSA supports different signature algorithm types now */
+    if (privkey->type != algorithm && privkey->type != SSH_KEYTYPE_RSA) {
+        SSH_LOG(SSH_LOG_WARN, "Incompatible signature algorithm passed");
+        return NULL;
+    }
 
     sig = ssh_signature_new();
     if (sig == NULL) {
         return NULL;
     }
 
-    sig->type = privkey->type;
+    sig->type = algorithm;
     sig->type_c = privkey->type_c;
 
     switch(privkey->type) {
         case SSH_KEYTYPE_RSA:
-            sig->rsa_sig = rsa_do_sign(hash, hlen, privkey->rsa);
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
+            sig->type_c = ssh_key_alg_to_char(algorithm);
+            sig->rsa_sig = rsa_do_sign_alg(hash, hlen, privkey->rsa, algorithm);
             if (sig->rsa_sig == NULL) {
                 ssh_signature_free(sig);
                 return NULL;
@@ -1065,22 +1123,34 @@ ssh_signature pki_do_sign(const ssh_key privkey, const unsigned char *hash,
 }
 
 #ifdef WITH_SERVER
-ssh_signature pki_do_sign_sessionid(const ssh_key key, const unsigned char
-        *hash, size_t hlen)
+ssh_signature pki_do_sign_sessionid_alg(const ssh_key key,
+                                        const unsigned char *hash,
+                                        size_t hlen,
+                                        enum ssh_keytypes_e algorithm)
 {
     ssh_signature sig = NULL;
     int rc;
+
+    /* Only RSA supports different signature algorithm types now */
+    if (privkey->type != algorithm && privkey->type != SSH_KEYTYPE_RSA) {
+        SSH_LOG(SSH_LOG_WARN, "Incompatible signature algorithm passed");
+        return NULL;
+    }
 
     sig = ssh_signature_new();
     if (sig == NULL) {
         return NULL;
     }
-    sig->type = key->type;
+
+    sig->type = algorithm;
     sig->type_c = key->type_c;
 
     switch (key->type) {
         case SSH_KEYTYPE_RSA:
-            sig->rsa_sig = rsa_do_sign(hash, hlen, key->rsa);
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
+            sig->type_c = ssh_key_alg_to_char(algorithm);
+            sig->rsa_sig = rsa_do_sign_alg(hash, hlen, key->rsa, key->type);
             if (sig->rsa_sig == NULL) {
                 ssh_signature_free(sig);
                 return NULL;

@@ -151,15 +151,6 @@ ssh_session ssh_new(void) {
     }
 #endif
 
-    id = strdup("%d/identity");
-    if (id == NULL) {
-      goto err;
-    }
-    rc = ssh_list_append(session->opts.identity, id);
-    if (rc == SSH_ERROR) {
-      goto err;
-    }
-
     return session;
 
 err:
@@ -291,6 +282,7 @@ void ssh_free(ssh_session session) {
   SAFE_FREE(session->opts.ProxyCommand);
   SAFE_FREE(session->opts.gss_server_identity);
   SAFE_FREE(session->opts.gss_client_identity);
+  SAFE_FREE(session->opts.pubkey_accepted_types);
 
   for (i = 0; i < 10; i++) {
       if (session->opts.wanted_methods[i]) {

@@ -118,6 +118,8 @@ static int pki_openssh_import_privkey_blob(ssh_buffer key_blob_buffer,
         /* p,q,g,pub_key,priv_key */
     case SSH_KEYTYPE_RSA_CERT01:
     case SSH_KEYTYPE_RSA:
+    case SSH_KEYTYPE_RSA_SHA256:
+    case SSH_KEYTYPE_RSA_SHA512:
         /* n,e,d,iqmp,p,q */
     case SSH_KEYTYPE_ECDSA:
         /* curve_name, group, privkey */

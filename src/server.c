@@ -67,6 +67,7 @@
 
 static int dh_handshake_server(ssh_session session);
 
+extern char *default_methods[];
 
 /**
  * @addtogroup libssh_server
@@ -87,7 +88,7 @@ static int server_set_kex(ssh_session session) {
   struct ssh_kex_struct *server = &session->next_crypto->server_kex;
   int i, j, rc;
   const char *wanted;
-  char hostkeys[64] = {0};
+  char hostkeys[128] = {0};
   enum ssh_keytypes_e keytype;
   size_t len;
   int ok;
@@ -123,6 +124,11 @@ static int server_set_kex(ssh_session session) {
   }
 #endif
   if (session->srv.rsa_key != NULL) {
+      /* We support also the SHA2 variants */
+      len = strlen(hostkeys);
+      snprintf(hostkeys + len, sizeof(hostkeys) - len,
+               ",rsa-sha2-512,rsa-sha2-256");
+
       len = strlen(hostkeys);
       keytype = ssh_key_type(session->srv.rsa_key);
 
@@ -192,6 +198,34 @@ static int ssh_server_kexdh_init(ssh_session session, ssh_buffer packet){
     }
     ssh_string_free(e);
     return SSH_OK;
+}
+
+static int ssh_server_send_extensions(ssh_session session) {
+    int rc;
+
+    SSH_LOG(SSH_LOG_PACKET, "Sending SSH_MSG_EXT_INFO");
+    /*
+     * We can list here all the default hostkey methods, since
+     * they already contain the SHA2 extension algorithms
+     */
+    rc = ssh_buffer_pack(session->out_buffer,
+                         "bdss",
+                         SSH2_MSG_EXT_INFO,
+                         1, /* nr. of extensions */
+                         "server-sig-algs",
+                         default_methods[SSH_HOSTKEYS]);
+    if (rc != SSH_OK)
+        goto error;
+
+    if (ssh_packet_send(session) == SSH_ERROR) {
+        goto error;
+    }
+
+    return 0;
+error:
+    ssh_buffer_reinit(session->out_buffer);
+
+    return -1;
 }
 
 SSH_PACKET_CALLBACK(ssh_packet_kexdh_init){
@@ -486,6 +520,15 @@ static void ssh_server_connection_callback(ssh_session session){
                 session->session_state=SSH_SESSION_STATE_AUTHENTICATING;
                 if (session->flags & SSH_SESSION_FLAG_AUTHENTICATED)
                     session->session_state = SSH_SESSION_STATE_AUTHENTICATED;
+
+               /*
+                * If the client supports extension negotiation, we will send
+                * our supported extensions now. This is the first message after
+                * sending NEWKEYS message and after turning on crypto.
+                */
+               if (session->extensions) {
+                   ssh_server_send_extensions(session);
+               }
             }
             break;
         case SSH_SESSION_STATE_AUTHENTICATING:

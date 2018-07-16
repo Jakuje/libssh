@@ -86,12 +86,12 @@
 
 #ifdef HAVE_ECDH
 #define ECDH "ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,"
-#define HOSTKEYS "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-rsa,ssh-dss"
+#define PUBLIC_KEY_ALGORITHMS "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-rsa,rsa-sha2-512,rsa-sha2-256,ssh-dss"
 #else
 #ifdef HAVE_DSA
-#define HOSTKEYS "ssh-ed25519,ssh-rsa,ssh-dss"
+#define PUBLIC_KEY_ALGORITHMS "ssh-ed25519,ssh-rsa,rsa-sha2-512,rsa-sha2-256,ssh-dss"
 #else
-#define HOSTKEYS "ssh-ed25519,ssh-rsa"
+#define PUBLIC_KEY_ALGORITHMS "ssh-ed25519,ssh-rsa,rsa-sha2-512,rsa-sha2-256"
 #endif
 #define ECDH ""
 #endif
@@ -101,10 +101,13 @@
 #define KEY_EXCHANGE CURVE25519 ECDH "diffie-hellman-group14-sha1,diffie-hellman-group1-sha1"
 #define KEX_METHODS_SIZE 10
 
+/* RFC 8308 */
+#define KEX_EXTENSION_CLIENT "ext-info-c"
+
 /* NOTE: This is a fixed API and the index is defined by ssh_kex_types_e */
-static const char *default_methods[] = {
+const char *default_methods[] = {
   KEY_EXCHANGE,
-  HOSTKEYS,
+  PUBLIC_KEY_ALGORITHMS,
   AES BLOWFISH DES,
   AES BLOWFISH DES,
   "hmac-sha2-256,hmac-sha2-512,hmac-sha1",
@@ -119,7 +122,7 @@ static const char *default_methods[] = {
 /* NOTE: This is a fixed API and the index is defined by ssh_kex_types_e */
 static const char *supported_methods[] = {
   KEY_EXCHANGE,
-  HOSTKEYS,
+  PUBLIC_KEY_ALGORITHMS,
   CHACHA20 AES BLOWFISH DES_SUPPORTED,
   CHACHA20 AES BLOWFISH DES_SUPPORTED,
   "hmac-sha2-256,hmac-sha2-512,hmac-sha1",
@@ -508,6 +511,22 @@ SSH_PACKET_CALLBACK(ssh_packet_kexinit){
         }
 
         /*
+         * If client sent a ext-info-c message in the kex list, it supports
+         * RFC 8308 extension negotiation.
+         */
+        rc = ssh_match_group(session->next_crypto->client_kex.methods[SSH_KEX],
+                             KEX_EXTENSION_CLIENT);
+        if (rc == 1) {
+            /*
+             * Enable all the supported extensions and when the time comes
+             * (after NEWKEYS) send them to the client.
+             */
+            SSH_LOG(SSH_LOG_DEBUG, "The client supports extension "
+                    "negotiation: enabling all extensions");
+            session->extensions = SSH_EXT_ALL;
+        }
+
+        /*
          * Remember whether 'first_kex_packet_follows' was set and the client
          * guess was wrong: in this case the next SSH_MSG_KEXDH_INIT message
          * must be ignored.
@@ -645,8 +664,9 @@ static char *ssh_client_select_hostkeys(ssh_session session)
 int ssh_set_client_kex(ssh_session session){
     struct ssh_kex_struct *client= &session->next_crypto->client_kex;
     const char *wanted;
+    char *kex;
     int ok;
-    int i;
+    int i, kex_len;
 
     ok = ssh_get_random(client->cookie, 16, 0);
     if (!ok) {
@@ -673,6 +693,17 @@ int ssh_set_client_kex(ssh_session session){
         }
     }
 
+    /* Here we append  ext-info-c  to the list of kex algorithms */
+    kex = client->methods[SSH_KEX];
+    kex_len = strlen(kex) + strlen(KEX_EXTENSION_CLIENT) + 2; /* comma, NULL */
+    kex = realloc(kex, kex_len);
+    if (kex == NULL) {
+        ssh_set_error_oom(session);
+        return SSH_ERROR;
+    }
+    strcat(kex, ","KEX_EXTENSION_CLIENT);
+    client->methods[SSH_KEX] = kex;
+
     return SSH_OK;
 }
 
@@ -682,7 +713,15 @@ int ssh_set_client_kex(ssh_session session){
 int ssh_kex_select_methods (ssh_session session){
     struct ssh_kex_struct *server = &session->next_crypto->server_kex;
     struct ssh_kex_struct *client = &session->next_crypto->client_kex;
+    char *ext_start = NULL;
     int i;
+
+    /* Here we should drop the  ext-info-c  from the list so we avoid matching.
+     * it. We added it to the end, so we can just truncate the string here */
+    ext_start = strstr(client->methods[SSH_KEX], ","KEX_EXTENSION_CLIENT);
+    if (ext_start != NULL) {
+        ext_start = '\0';
+    }
 
     for (i = 0; i < KEX_METHODS_SIZE; i++) {
         session->next_crypto->kex_methods[i]=ssh_find_matching(server->methods[i],client->methods[i]);

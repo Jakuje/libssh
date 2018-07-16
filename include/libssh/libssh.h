@@ -268,7 +268,10 @@ enum ssh_keytypes_e{
   SSH_KEYTYPE_ECDSA,
   SSH_KEYTYPE_ED25519,
   SSH_KEYTYPE_DSS_CERT01,
-  SSH_KEYTYPE_RSA_CERT01
+  SSH_KEYTYPE_RSA_CERT01,
+  /* signature types, but should be usable also as key types */
+  SSH_KEYTYPE_RSA_SHA256,
+  SSH_KEYTYPE_RSA_SHA512
 };
 
 enum ssh_keycmp_e {
@@ -376,6 +379,7 @@ enum ssh_options_e {
   SSH_OPTIONS_GSSAPI_AUTH,
   SSH_OPTIONS_GLOBAL_KNOWNHOSTS,
   SSH_OPTIONS_NODELAY,
+  SSH_OPTIONS_PUBLICKEY_ACCEPTED_TYPES,
 };
 
 enum {
@@ -603,6 +607,9 @@ LIBSSH_API ssh_key ssh_key_new(void);
 LIBSSH_API void ssh_key_free (ssh_key key);
 LIBSSH_API enum ssh_keytypes_e ssh_key_type(const ssh_key key);
 LIBSSH_API const char *ssh_key_type_to_char(enum ssh_keytypes_e type);
+LIBSSH_API const char *ssh_key_alg_to_char(enum ssh_keytypes_e type);
+LIBSSH_API enum ssh_keytypes_e ssh_key_type_to_alg(ssh_session session,
+                                                   enum ssh_keytypes_e type);
 LIBSSH_API enum ssh_keytypes_e ssh_key_type_from_name(const char *name);
 LIBSSH_API int ssh_key_is_public(const ssh_key k);
 LIBSSH_API int ssh_key_is_private(const ssh_key k);
