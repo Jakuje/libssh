@@ -99,9 +99,12 @@ ssh_signature pki_do_sign_alg(const ssh_key privkey,
                               const unsigned char *hash,
                               size_t hlen,
                               enum ssh_keytypes_e algorithm);
-ssh_signature pki_do_sign_sessionid(const ssh_key key,
-                                    const unsigned char *hash,
-                                    size_t hlen);
+#define pki_do_sign_sessionid(key, hash, hlen) \
+    pki_do_sign_sessionid_alg(key, hash, hlen, key->type)
+ssh_signature pki_do_sign_sessionid_alg(const ssh_key key,
+                                        const unsigned char *hash,
+                                        size_t hlen,
+                                        enum ssh_keytypes_e algorithm);
 int pki_ed25519_sign(const ssh_key privkey, ssh_signature sig,
         const unsigned char *hash, size_t hlen);
 int pki_ed25519_verify(const ssh_key pubkey, ssh_signature sig,
