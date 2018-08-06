@@ -257,7 +257,7 @@ const char *ssh_key_type_to_char(enum ssh_keytypes_e type) {
  *
  * @return              A public key algorithm to be used.
  */
-static enum ssh_keytypes_e ssh_key_type_to_algorithm(ssh_session session,
+enum ssh_keytypes_e ssh_key_type_to_algorithm(ssh_session session,
                                               enum ssh_keytypes_e type)
 {
     /* TODO this should also reflect supported key types specified in
