@@ -105,7 +105,7 @@
 #define KEX_EXTENSION_CLIENT "ext-info-c"
 
 /* NOTE: This is a fixed API and the index is defined by ssh_kex_types_e */
-static const char *default_methods[] = {
+const char *default_methods[] = {
   KEY_EXCHANGE,
   PUBLIC_KEY_ALGORITHMS,
   AES BLOWFISH DES,
