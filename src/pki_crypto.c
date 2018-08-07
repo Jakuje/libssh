@@ -851,6 +851,8 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
             /* Cannot open ed25519 keys with libcrypto */
         case SSH_KEYTYPE_DSS_CERT01:
         case SSH_KEYTYPE_RSA_CERT01:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_UNKNOWN:
             BIO_free(mem);
             SSH_LOG(SSH_LOG_WARN, "Unkown or invalid private key type %d", type);
@@ -1277,6 +1279,8 @@ ssh_string pki_signature_to_blob(const ssh_signature sig)
             sig_blob = pki_dsa_signature_to_blob(sig);
             break;
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_RSA1:
             sig_blob = ssh_string_copy(sig->rsa_sig);
             break;
@@ -1424,7 +1428,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
     }
 
     sig->type = type;
-    sig->type_c = ssh_key_type_to_char(type);
+    sig->type_c = ssh_key_algorithm_to_char(type);
 
     len = ssh_string_len(sig_blob);
 
@@ -1486,6 +1490,8 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
 
             break;
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_RSA1:
             sig = pki_signature_from_rsa_blob(pubkey, sig_blob, sig);
             break;
@@ -1598,6 +1604,7 @@ int pki_signature_verify(ssh_session session,
                          size_t hlen)
 {
     int rc;
+    int nid;
 
     switch(key->type) {
         case SSH_KEYTYPE_DSS:
@@ -1615,13 +1622,32 @@ int pki_signature_verify(ssh_session session,
             break;
         case SSH_KEYTYPE_RSA:
         case SSH_KEYTYPE_RSA1:
-            rc = RSA_verify(NID_sha1,
+            switch (sig->type) {
+            case SSH_KEYTYPE_RSA:
+                nid = NID_sha1;
+                break;
+            case SSH_KEYTYPE_RSA_SHA256:
+                nid = NID_sha256;
+                break;
+            case SSH_KEYTYPE_RSA_SHA512:
+                nid = NID_sha512;
+                break;
+            default:
+                SSH_LOG(SSH_LOG_TRACE, "Unknown sig type %d", sig->type);
+                ssh_set_error(session,
+                              SSH_FATAL,
+                              "Unexpected signature type %s during RSA verify",
+                              sig->type_c);
+                return SSH_ERROR;
+            }
+            rc = RSA_verify(nid,
                             hash,
                             hlen,
                             ssh_string_data(sig->rsa_sig),
                             ssh_string_len(sig->rsa_sig),
                             key->rsa);
             if (rc <= 0) {
+                SSH_LOG(SSH_LOG_TRACE, "RSA verify failed");
                 ssh_set_error(session,
                               SSH_FATAL,
                               "RSA error: %s",
@@ -1655,6 +1681,7 @@ int pki_signature_verify(ssh_session session,
 #endif
         case SSH_KEYTYPE_UNKNOWN:
         default:
+            SSH_LOG(SSH_LOG_TRACE, "Unknown key type");
             ssh_set_error(session, SSH_FATAL, "Unknown public key type");
             return SSH_ERROR;
     }

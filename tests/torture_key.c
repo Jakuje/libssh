@@ -360,6 +360,8 @@ static const char *torture_get_testkey_internal(enum ssh_keytypes_e type,
         case SSH_KEYTYPE_RSA_CERT01:
             return torture_rsa_testkey_cert;
         case SSH_KEYTYPE_RSA1:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_UNKNOWN:
             return NULL;
     }

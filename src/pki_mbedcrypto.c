@@ -704,6 +704,8 @@ ssh_string pki_signature_to_blob(const ssh_signature sig)
 
     switch(sig->type) {
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
             sig_blob = ssh_string_copy(sig->rsa_sig);
             break;
         case SSH_KEYTYPE_ECDSA: {
@@ -838,6 +840,8 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey, const ssh_string
 
     switch(type) {
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
             sig = pki_signature_from_rsa_blob(pubkey, sig_blob, sig);
             break;
         case SSH_KEYTYPE_ECDSA: {
@@ -927,10 +931,29 @@ int pki_signature_verify(ssh_session session, const ssh_signature sig, const
         ssh_key key, const unsigned char *hash, size_t hlen)
 {
     int rc;
+    mbedtls_md_type_t md = 0;
 
     switch (key->type) {
         case SSH_KEYTYPE_RSA:
-            rc = mbedtls_pk_verify(key->rsa, MBEDTLS_MD_SHA1, hash, hlen,
+            switch (sig->type) {
+            case SSH_KEYTYPE_RSA:
+                md = MBEDTLS_MD_SHA1;
+                break;
+            case SSH_KEYTYPE_RSA_SHA256:
+                md = MBEDTLS_MD_SHA256;
+                break;
+            case SSH_KEYTYPE_RSA_SHA512:
+                md = MBEDTLS_MD_SHA512;
+                break;
+            default:
+                SSH_LOG(SSH_LOG_TRACE, "Unknown sig type %d", sig->type);
+                ssh_set_error(session,
+                              SSH_FATAL,
+                              "Unexpected signature type %s during RSA verify",
+                              sig->type_c);
+                return SSH_ERROR;
+            }
+            rc = mbedtls_pk_verify(key->rsa, md, hash, hlen,
                     ssh_string_data(sig->rsa_sig),
                     ssh_string_len(sig->rsa_sig));
             if (rc != 0) {
