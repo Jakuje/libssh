@@ -56,6 +56,7 @@ static struct ssh_hmac_struct ssh_hmac_tab[] = {
   { "hmac-sha2-512", SSH_HMAC_SHA512 },
   { "hmac-md5",      SSH_HMAC_MD5 },
   { "aead-poly1305", SSH_HMAC_AEAD_POLY1305 },
+  { "aead-gcm",      SSH_HMAC_AEAD_GCM },
   { NULL,            0}
 };
 
@@ -77,6 +78,8 @@ size_t hmac_digest_len(enum ssh_hmac_e type) {
       return MD5_DIGEST_LEN;
     case SSH_HMAC_AEAD_POLY1305:
       return POLY1305_TAGLEN;
+    case SSH_HMAC_AEAD_GCM:
+      return 16;
     default:
       return 0;
   }
@@ -256,7 +259,12 @@ static int crypt_set_algorithms2(ssh_session session){
 
   if (session->next_crypto->out_cipher->aead_encrypt != NULL){
       /* this cipher has integrated MAC */
-      wanted = "aead-poly1305";
+      if (session->next_crypto->out_cipher->ciphertype == SSH_AEAD_AES128_GCM ||
+          session->next_crypto->out_cipher->ciphertype == SSH_AEAD_AES256_GCM) {
+          wanted = "aead-gcm";
+      } else { /* No good way to identify chacha now */
+          wanted = "aead-poly1305";
+      }
   } else {
       /*
        * We must scan the kex entries to find hmac algorithms and set their
@@ -310,7 +318,12 @@ static int crypt_set_algorithms2(ssh_session session){
 
   if (session->next_crypto->in_cipher->aead_encrypt != NULL){
       /* this cipher has integrated MAC */
-      wanted = "aead-poly1305";
+      if (session->next_crypto->in_cipher->ciphertype == SSH_AEAD_AES128_GCM ||
+          session->next_crypto->in_cipher->ciphertype == SSH_AEAD_AES256_GCM) {
+          wanted = "aead-gcm";
+      } else { /* No good way to identify chacha now */
+          wanted = "aead-poly1305";
+      }
   } else {
       /* we must scan the kex entries to find hmac algorithms and set their appropriate structure */
       wanted = session->next_crypto->kex_methods[SSH_MAC_S_C];
@@ -398,7 +411,12 @@ int crypt_set_algorithms_server(ssh_session session){
     i=0;
     if (session->next_crypto->out_cipher->aead_encrypt != NULL){
         /* this cipher has integrated MAC */
-        method = "aead-poly1305";
+        if (session->next_crypto->out_cipher->ciphertype == SSH_AEAD_AES128_GCM ||
+            session->next_crypto->out_cipher->ciphertype == SSH_AEAD_AES256_GCM) {
+            method = "aead-gcm";
+        } else { /* No good way to identify chacha now */
+            method = "aead-poly1305";
+        }
     } else {
         /* we must scan the kex entries to find hmac algorithms and set their appropriate structure */
         /* out */
@@ -449,7 +467,12 @@ int crypt_set_algorithms_server(ssh_session session){
 
     if (session->next_crypto->in_cipher->aead_encrypt != NULL){
         /* this cipher has integrated MAC */
-        method = "aead-poly1305";
+        if (session->next_crypto->in_cipher->ciphertype == SSH_AEAD_AES128_GCM ||
+            session->next_crypto->in_cipher->ciphertype == SSH_AEAD_AES256_GCM) {
+            method = "aead-gcm";
+        } else { /* No good way to identify chacha now */
+            method = "aead-poly1305";
+        }
     } else {
         /* we must scan the kex entries to find hmac algorithms and set their appropriate structure */
         method = session->next_crypto->kex_methods[SSH_MAC_C_S];

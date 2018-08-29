@@ -240,6 +240,20 @@ static void torture_algorithms_aes256_ctr_hmac_sha2_512(void **state) {
     test_algorithm(s->ssh.session, NULL/*kex*/, "aes256-ctr", "hmac-sha2-512");
 }
 
+#if defined(WITH_LIBCRYPTO) && defined(HAVE_OPENSSL_EVP_AES_GCM)
+static void torture_algorithms_aes128_gcm(void **state) {
+    struct torture_state *s = *state;
+
+    test_algorithm(s->ssh.session, NULL/*kex*/, "aes128-gcm@openssh.com", NULL);
+}
+
+static void torture_algorithms_aes256_gcm(void **state) {
+    struct torture_state *s = *state;
+
+    test_algorithm(s->ssh.session, NULL/*kex*/, "aes256-gcm@openssh.com", NULL);
+}
+#endif /* defined(WITH_LIBCRYPTO) && defined(HAVE_OPENSSL_EVP_AES_GCM) */
+
 static void torture_algorithms_3des_cbc_hmac_sha1(void **state) {
     struct torture_state *s = *state;
 
@@ -464,6 +478,14 @@ int torture_run_tests(void) {
         cmocka_unit_test_setup_teardown(torture_algorithms_aes256_ctr_hmac_sha2_512,
                                         session_setup,
                                         session_teardown),
+#if defined(WITH_LIBCRYPTO) && defined(HAVE_OPENSSL_EVP_AES_GCM)
+        cmocka_unit_test_setup_teardown(torture_algorithms_aes128_gcm,
+                                        session_setup,
+                                        session_teardown),
+        cmocka_unit_test_setup_teardown(torture_algorithms_aes256_gcm,
+                                        session_setup,
+                                        session_teardown),
+#endif /* defined(WITH_LIBCRYPTO) && defined(HAVE_OPENSSL_EVP_AES_GCM) */
         cmocka_unit_test_setup_teardown(torture_algorithms_3des_cbc_hmac_sha1,
                                         session_setup,
                                         session_teardown),

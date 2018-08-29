@@ -435,6 +435,28 @@ static int torture_pkd_setup_ecdsa_521(void **state) {
     f(client, ecdsa_521_chacha20,      ciphercmd(CHACHA20),        setup_ecdsa_521,  teardown)
 #endif
 
+#if defined(HAVE_LIBCRYPTO) && defined(HAVE_OPENSSL_EVP_AES_GCM)
+#define AES128_GCM "aes128-gcm@openssh.com"
+#define AES256_GCM "aes256-gcm@openssh.com"
+
+#define PKDTESTS_OPENSSL_CIPHER_OPENSSHONLY(f, client, ciphercmd) \
+    /* OpenSSL ciphers */ \
+    f(client, rsa_aes128_gcm,          ciphercmd(AES128_GCM),      setup_rsa,        teardown) \
+    f(client, rsa_aes256_gcm,          ciphercmd(AES256_GCM),      setup_rsa,        teardown) \
+    f(client, dsa_aes128_gcm,          ciphercmd(AES128_GCM),      setup_dsa,        teardown) \
+    f(client, dsa_aes256_gcm,          ciphercmd(AES256_GCM),      setup_dsa,        teardown) \
+    f(client, ed25519_aes128_gcm,      ciphercmd(AES128_GCM),      setup_ed25519,    teardown) \
+    f(client, ed25519_aes256_gcm,      ciphercmd(AES256_GCM),      setup_ed25519,    teardown) \
+    f(client, ecdsa_256_aes128_gcm,    ciphercmd(AES128_GCM),      setup_ecdsa_256,  teardown) \
+    f(client, ecdsa_256_aes256_gcm,    ciphercmd(AES256_GCM),      setup_ecdsa_256,  teardown) \
+    f(client, ecdsa_384_aes128_gcm,    ciphercmd(AES128_GCM),      setup_ecdsa_384,  teardown) \
+    f(client, ecdsa_384_aes256_gcm,    ciphercmd(AES256_GCM),      setup_ecdsa_384,  teardown) \
+    f(client, ecdsa_521_aes128_gcm,    ciphercmd(AES128_GCM),      setup_ecdsa_521,  teardown) \
+    f(client, ecdsa_521_aes256_gcm,    ciphercmd(AES256_GCM),      setup_ecdsa_521,  teardown)
+#else
+#define PKDTESTS_OPENSSL_CIPHER_OPENSSHONLY(f, client, ciphercmd)
+#endif
+
 #ifdef HAVE_DSA
 #define PKDTESTS_MAC(f, client, maccmd) \
     /* MACs. */ \
@@ -531,6 +553,7 @@ PKDTESTS_KEX(emit_keytest, openssh_dsa, OPENSSH_KEX_CMD)
 PKDTESTS_KEX_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_KEX_CMD)
 PKDTESTS_CIPHER(emit_keytest, openssh_dsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_CIPHER_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_CIPHER_CMD)
+PKDTESTS_OPENSSL_CIPHER_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_MAC(emit_keytest, openssh_dsa, OPENSSH_MAC_CMD)
 PKDTESTS_MAC_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_MAC_CMD)
 #undef CLIENT_ID_FILE
@@ -543,6 +566,7 @@ PKDTESTS_KEX(emit_keytest, openssh_rsa, OPENSSH_KEX_CMD)
 PKDTESTS_KEX_OPENSSHONLY(emit_keytest, openssh_rsa, OPENSSH_KEX_CMD)
 PKDTESTS_CIPHER(emit_keytest, openssh_rsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_CIPHER_OPENSSHONLY(emit_keytest, openssh_rsa, OPENSSH_CIPHER_CMD)
+PKDTESTS_OPENSSL_CIPHER_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_MAC(emit_keytest, openssh_rsa, OPENSSH_MAC_CMD)
 PKDTESTS_MAC_OPENSSHONLY(emit_keytest, openssh_rsa, OPENSSH_MAC_CMD)
 #undef CLIENT_ID_FILE
@@ -554,6 +578,7 @@ PKDTESTS_KEX(emit_keytest, openssh_e256, OPENSSH_KEX_CMD)
 PKDTESTS_KEX_OPENSSHONLY(emit_keytest, openssh_e256, OPENSSH_KEX_CMD)
 PKDTESTS_CIPHER(emit_keytest, openssh_e256, OPENSSH_CIPHER_CMD)
 PKDTESTS_CIPHER_OPENSSHONLY(emit_keytest, openssh_e256, OPENSSH_CIPHER_CMD)
+PKDTESTS_OPENSSL_CIPHER_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_MAC(emit_keytest, openssh_e256, OPENSSH_MAC_CMD)
 PKDTESTS_MAC_OPENSSHONLY(emit_keytest, openssh_e256, OPENSSH_MAC_CMD)
 #undef CLIENT_ID_FILE
@@ -569,6 +594,7 @@ PKDTESTS_KEX(emit_keytest, openssh_ed, OPENSSH_KEX_CMD)
 PKDTESTS_KEX_OPENSSHONLY(emit_keytest, openssh_ed, OPENSSH_KEX_CMD)
 PKDTESTS_CIPHER(emit_keytest, openssh_ed, OPENSSH_CIPHER_CMD)
 PKDTESTS_CIPHER_OPENSSHONLY(emit_keytest, openssh_ed, OPENSSH_CIPHER_CMD)
+PKDTESTS_OPENSSL_CIPHER_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_MAC(emit_keytest, openssh_ed, OPENSSH_MAC_CMD)
 PKDTESTS_MAC_OPENSSHONLY(emit_keytest, openssh_ed, OPENSSH_MAC_CMD)
 #undef CLIENT_ID_FILE

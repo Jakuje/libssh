@@ -78,7 +78,9 @@ enum ssh_cipher_e {
     SSH_AES256_CBC,
     SSH_AES128_CTR,
     SSH_AES192_CTR,
-    SSH_AES256_CTR
+    SSH_AES256_CTR,
+    SSH_AEAD_AES128_GCM,
+    SSH_AEAD_AES256_GCM
 };
 
 struct ssh_crypto_struct {
@@ -149,6 +151,7 @@ struct ssh_cipher_struct {
     struct chacha20_poly1305_keysched *chacha20_schedule;
     unsigned int keysize; /* bytes of key used. != keylen */
     size_t tag_size; /* overhead required for tag */
+    size_t iv_size; /* Default is block_size */
     /* sets the new key for immediate use */
     int (*set_encrypt_key)(struct ssh_cipher_struct *cipher, void *key, void *IV);
     int (*set_decrypt_key)(struct ssh_cipher_struct *cipher, void *key, void *IV);
