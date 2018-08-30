@@ -619,6 +619,8 @@ int pki_key_compare(const ssh_key k1,
 #endif
         case SSH_KEYTYPE_ED25519:
             /* ed25519 keys handled globaly */
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_UNKNOWN:
         default:
             return 1;
@@ -636,11 +638,6 @@ ssh_string pki_private_key_to_pem(const ssh_key key,
     BUF_MEM *buf;
     BIO *mem;
     int rc;
-
-    /* needed for openssl initialization */
-    if (ssh_init() < 0) {
-        return NULL;
-    }
 
     mem = BIO_new(BIO_s_mem());
     if (mem == NULL) {
@@ -768,11 +765,6 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
     void *ecdsa = NULL;
 #endif
 
-    /* needed for openssl initialization */
-    if (ssh_init() < 0) {
-        return NULL;
-    }
-
     type = pki_privatekey_type_from_string(b64_key);
     if (type == SSH_KEYTYPE_UNKNOWN) {
         SSH_LOG(SSH_LOG_WARN, "Unknown or invalid private key.");
@@ -861,6 +853,8 @@ ssh_key pki_private_key_from_base64(const char *b64_key,
             /* Cannot open ed25519 keys with libcrypto */
         case SSH_KEYTYPE_DSS_CERT01:
         case SSH_KEYTYPE_RSA_CERT01:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_UNKNOWN:
             BIO_free(mem);
             SSH_LOG(SSH_LOG_WARN, "Unkown or invalid private key type %d", type);
@@ -1191,23 +1185,42 @@ fail:
  *
  * @param[in]  privkey   The private rsa key to use for signing.
  *
+ * @param[in]  algorithm The public key algorithm to use.
+ *
  * @return               A newly allocated rsa sig blob or NULL on error.
  */
-static ssh_string _RSA_do_sign(const unsigned char *digest,
-                               int dlen,
-                               RSA *privkey)
+static ssh_string _RSA_do_sign_alg(const unsigned char *digest,
+                                   int dlen,
+                                   RSA *privkey,
+                                   enum ssh_keytypes_e algorithm)
 {
     ssh_string sig_blob;
     unsigned char *sig;
     unsigned int slen;
     int ok;
+    int nid = 0;
+
+    switch (algorithm) {
+    case SSH_KEYTYPE_RSA:
+        nid = NID_sha1;
+        break;
+    case SSH_KEYTYPE_RSA_SHA256:
+        nid = NID_sha256;
+        break;
+    case SSH_KEYTYPE_RSA_SHA512:
+        nid = NID_sha512;
+        break;
+    default:
+        SSH_LOG(SSH_LOG_WARN, "Incomplatible key algorithm");
+        return NULL;
+    }
 
     sig = malloc(RSA_size(privkey));
     if (sig == NULL) {
         return NULL;
     }
 
-    ok = RSA_sign(NID_sha1, digest, dlen, sig, &slen, privkey);
+    ok = RSA_sign(nid, digest, dlen, sig, &slen, privkey);
     if (!ok) {
         SAFE_FREE(sig);
         return NULL;
@@ -1287,6 +1300,8 @@ ssh_string pki_signature_to_blob(const ssh_signature sig)
             sig_blob = pki_dsa_signature_to_blob(sig);
             break;
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_RSA1:
             sig_blob = ssh_string_copy(sig->rsa_sig);
             break;
@@ -1434,7 +1449,7 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
     }
 
     sig->type = type;
-    sig->type_c = ssh_key_type_to_char(type);
+    sig->type_c = ssh_key_algorithm_to_char(type);
 
     len = ssh_string_len(sig_blob);
 
@@ -1496,6 +1511,8 @@ ssh_signature pki_signature_from_blob(const ssh_key pubkey,
 
             break;
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
         case SSH_KEYTYPE_RSA1:
             sig = pki_signature_from_rsa_blob(pubkey, sig_blob, sig);
             break;
@@ -1608,6 +1625,7 @@ int pki_signature_verify(ssh_session session,
                          size_t hlen)
 {
     int rc;
+    int nid;
 
     switch(key->type) {
         case SSH_KEYTYPE_DSS:
@@ -1625,13 +1643,32 @@ int pki_signature_verify(ssh_session session,
             break;
         case SSH_KEYTYPE_RSA:
         case SSH_KEYTYPE_RSA1:
-            rc = RSA_verify(NID_sha1,
+            switch (sig->type) {
+            case SSH_KEYTYPE_RSA:
+                nid = NID_sha1;
+                break;
+            case SSH_KEYTYPE_RSA_SHA256:
+                nid = NID_sha256;
+                break;
+            case SSH_KEYTYPE_RSA_SHA512:
+                nid = NID_sha512;
+                break;
+            default:
+                SSH_LOG(SSH_LOG_TRACE, "Unknown sig type %d", sig->type);
+                ssh_set_error(session,
+                              SSH_FATAL,
+                              "Unexpected signature type %s during RSA verify",
+                              sig->type_c);
+                return SSH_ERROR;
+            }
+            rc = RSA_verify(nid,
                             hash,
                             hlen,
                             ssh_string_data(sig->rsa_sig),
                             ssh_string_len(sig->rsa_sig),
                             key->rsa);
             if (rc <= 0) {
+                SSH_LOG(SSH_LOG_TRACE, "RSA verify failed");
                 ssh_set_error(session,
                               SSH_FATAL,
                               "RSA error: %s",
@@ -1665,6 +1702,7 @@ int pki_signature_verify(ssh_session session,
 #endif
         case SSH_KEYTYPE_UNKNOWN:
         default:
+            SSH_LOG(SSH_LOG_TRACE, "Unknown key type");
             ssh_set_error(session, SSH_FATAL, "Unknown public key type");
             return SSH_ERROR;
     }
@@ -1672,18 +1710,26 @@ int pki_signature_verify(ssh_session session,
     return SSH_OK;
 }
 
-ssh_signature pki_do_sign(const ssh_key privkey,
-                          const unsigned char *hash,
-                          size_t hlen) {
+ssh_signature pki_do_sign_alg(const ssh_key privkey,
+                              const unsigned char *hash,
+                              size_t hlen,
+                              enum ssh_keytypes_e algorithm)
+{
     ssh_signature sig;
     int rc;
+
+    /* Only RSA supports different signature algorithm types now */
+    if (privkey->type != algorithm && privkey->type != SSH_KEYTYPE_RSA) {
+        SSH_LOG(SSH_LOG_WARN, "Incompatible signature algorithm passed");
+        return NULL;
+    }
 
     sig = ssh_signature_new();
     if (sig == NULL) {
         return NULL;
     }
 
-    sig->type = privkey->type;
+    sig->type = algorithm;
     sig->type_c = privkey->type_c;
 
     switch(privkey->type) {
@@ -1706,7 +1752,8 @@ ssh_signature pki_do_sign(const ssh_key privkey,
             break;
         case SSH_KEYTYPE_RSA:
         case SSH_KEYTYPE_RSA1:
-            sig->rsa_sig = _RSA_do_sign(hash, hlen, privkey->rsa);
+            sig->type_c = ssh_key_algorithm_to_char(algorithm);
+            sig->rsa_sig = _RSA_do_sign_alg(hash, hlen, privkey->rsa, algorithm);
             if (sig->rsa_sig == NULL) {
                 ssh_signature_free(sig);
                 return NULL;
@@ -1749,17 +1796,25 @@ ssh_signature pki_do_sign(const ssh_key privkey,
 }
 
 #ifdef WITH_SERVER
-ssh_signature pki_do_sign_sessionid(const ssh_key key,
-                                    const unsigned char *hash,
-                                    size_t hlen)
+ssh_signature pki_do_sign_sessionid_alg(const ssh_key key,
+                                        const unsigned char *hash,
+                                        size_t hlen,
+                                        enum ssh_keytypes_e algorithm)
 {
     ssh_signature sig;
+
+    /* Only RSA supports different signature algorithm types now */
+    if (key->type != algorithm && key->type != SSH_KEYTYPE_RSA) {
+        SSH_LOG(SSH_LOG_WARN, "Incompatible signature algorithm passed");
+        return NULL;
+    }
 
     sig = ssh_signature_new();
     if (sig == NULL) {
         return NULL;
     }
-    sig->type = key->type;
+
+    sig->type = algorithm;
     sig->type_c = key->type_c;
 
     switch(key->type) {
@@ -1772,7 +1827,8 @@ ssh_signature pki_do_sign_sessionid(const ssh_key key,
             break;
         case SSH_KEYTYPE_RSA:
         case SSH_KEYTYPE_RSA1:
-            sig->rsa_sig = _RSA_do_sign(hash, hlen, key->rsa);
+            sig->type_c = ssh_key_algorithm_to_char(algorithm);
+            sig->rsa_sig = _RSA_do_sign_alg(hash, hlen, key->rsa, algorithm);
             if (sig->rsa_sig == NULL) {
                 ssh_signature_free(sig);
                 return NULL;

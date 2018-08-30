@@ -270,3 +270,65 @@ SSH_PACKET_CALLBACK(ssh_packet_service_accept){
 
 	return SSH_PACKET_USED;
 }
+
+/**
+ * @internal
+ * @brief handles a SSH2_MSG_EXT_INFO packet defined in RFC 8308
+ *
+ */
+SSH_PACKET_CALLBACK(ssh_packet_ext_info)
+{
+    int rc;
+    uint32_t nr_extensions = 0;
+    uint32_t i;
+    (void)type;
+    (void)user;
+
+    SSH_LOG(SSH_LOG_PACKET, "Received SSH_MSG_EXT_INFO");
+
+    rc = ssh_buffer_get_u32(packet, &nr_extensions);
+    if (rc == 0) {
+        SSH_LOG(SSH_LOG_PACKET, "Failed to read number of extensions");
+        return SSH_PACKET_USED;
+    }
+    nr_extensions = ntohl(nr_extensions);
+    SSH_LOG(SSH_LOG_PACKET, "Follows %u extensions", nr_extensions);
+
+    for (i = 0; i < nr_extensions; i++) {
+        ssh_string ext_name = NULL;
+        ssh_string ext_value = NULL;
+        const char *name = NULL;
+        const char *value = NULL;
+        int cmp;
+
+        ext_name = ssh_buffer_get_ssh_string(packet);
+        if (ext_name == NULL) {
+            SSH_LOG(SSH_LOG_PACKET, "Error reading extension name");
+            return SSH_PACKET_USED;
+        }
+        ext_value = ssh_buffer_get_ssh_string(packet);
+        if (ext_value == NULL) {
+            SSH_LOG(SSH_LOG_PACKET, "Error reading extension value");
+            ssh_string_free(ext_name);
+            return SSH_PACKET_USED;
+        }
+
+        name = ssh_string_get_char(ext_name);
+        value = ssh_string_get_char(ext_value);
+        cmp = strcmp(name, "server-sig-algs");
+        if (cmp == 0) {
+            /* TODO check for NULL bytes */
+            SSH_LOG(SSH_LOG_PACKET, "Extension: %s=<%s>", name, value);
+            if (ssh_match_group(value, "rsa-sha2-512")) {
+                session->extensions |= SSH_EXT_SIG_RSA_SHA512;
+            }
+            if (ssh_match_group(value, "rsa-sha2-256")) {
+                session->extensions |= SSH_EXT_SIG_RSA_SHA256;
+            }
+        }
+        ssh_string_free(ext_name);
+        ssh_string_free(ext_value);
+    }
+
+    return SSH_PACKET_USED;
+}

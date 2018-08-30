@@ -23,6 +23,7 @@ extern LIBSSH_THREAD int ssh_log_level;
 #define ID_FILE "/etc/xxx"
 #define KEXALGORITHMS "ecdh-sha2-nistp521,diffie-hellman-group14-sha1"
 #define HOSTKEYALGORITHMS "ssh-ed25519,ecdsa-sha2-nistp521,ssh-rsa"
+#define PUBKEYACCEPTEDTYPES "rsa-sha2-512,ssh-rsa,ecdsa-sha2-nistp521"
 #define MACS "hmac-sha1,hmac-sha2-256"
 #define USER_KNOWN_HOSTS "%d/my_known_hosts"
 #define GLOBAL_KNOWN_HOSTS "/etc/ssh/my_ssh_known_hosts"
@@ -50,6 +51,7 @@ static int setup_config_files(void **state)
                        "\n\nIdentityFile "ID_FILE"\n"
                        "\n\nKexAlgorithms "KEXALGORITHMS"\n"
                        "\n\nHostKeyAlgorithms "HOSTKEYALGORITHMS"\n"
+                       "\n\nPubkeyAcceptedTypes "PUBKEYACCEPTEDTYPES"\n"
                        "\n\nMACs "MACS"\n");
 
     /* Multiple Port settings -> parsing returns early. */
@@ -148,6 +150,8 @@ static void torture_config_from_file(void **state) {
 
     assert_string_equal(session->opts.wanted_methods[SSH_HOSTKEYS], HOSTKEYALGORITHMS);
 
+    assert_string_equal(session->opts.pubkey_accepted_types, PUBKEYACCEPTEDTYPES);
+
     assert_string_equal(session->opts.wanted_methods[SSH_MAC_C_S], MACS);
     assert_string_equal(session->opts.wanted_methods[SSH_MAC_S_C], MACS);
 }
@@ -176,12 +180,14 @@ static void torture_config_glob(void **state) {
 #ifdef HAVE_GLOB
     ret = ssh_options_get(session, SSH_OPTIONS_PROXYCOMMAND, &v);
     assert_true(ret == 0);
+    assert_non_null(v);
 
     assert_string_equal(v, PROXYCMD);
     ssh_string_free_char(v);
 
     ret = ssh_options_get(session, SSH_OPTIONS_IDENTITY, &v);
     assert_true(ret == 0);
+    assert_non_null(v);
 
     assert_string_equal(v, ID_FILE);
     ssh_string_free_char(v);

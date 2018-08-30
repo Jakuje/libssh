@@ -514,6 +514,21 @@ ssh_string ssh_agent_sign_data(ssh_session session,
         return NULL;
     }
 
+    /*
+     * make sure it already can contain all the expected content:
+     * - 1 x uint8_t
+     * - 2 x uint32_t
+     * - 1 x ssh_string (uint8_t + data)
+     */
+    rc = ssh_buffer_allocate_size(request,
+                                  sizeof(uint8_t) * 2 +
+                                  sizeof(uint32_t) * 2 +
+                                  ssh_string_len(key_blob));
+    if (rc < 0) {
+        ssh_buffer_free(request);
+        return NULL;
+    }
+
     /* adds len + blob */
     rc = ssh_buffer_add_ssh_string(request, key_blob);
     ssh_string_free(key_blob);
@@ -533,6 +548,14 @@ ssh_string ssh_agent_sign_data(ssh_session session,
         return NULL;
     }
 
+    /* Add Flags: SHA2 extension (RFC 8332) if negotiated */
+    if (pubkey->type == SSH_KEYTYPE_RSA) {
+        if (session->extensions & SSH_EXT_SIG_RSA_SHA512) {
+            flags |= SSH_AGENT_RSA_SHA2_512;
+        } else if (session->extensions & SSH_EXT_SIG_RSA_SHA256) {
+            flags |= SSH_AGENT_RSA_SHA2_256;
+        }
+    }
     if (ssh_buffer_add_u32(request, htonl(flags)) < 0) {
         ssh_buffer_free(request);
         return NULL;

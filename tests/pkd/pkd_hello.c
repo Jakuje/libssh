@@ -152,6 +152,13 @@ static int torture_pkd_setup_rsa(void **state) {
     return 0;
 }
 
+static int torture_pkd_setup_ed25519(void **state) {
+    setup_ed25519_key();
+    *state = (void *) torture_pkd_setup(PKD_ED25519, LIBSSH_ED25519_TESTKEY);
+
+    return 0;
+}
+
 #ifdef HAVE_DSA
 static int torture_pkd_setup_dsa(void **state) {
     setup_dsa_key();
@@ -203,14 +210,18 @@ static int torture_pkd_setup_ecdsa_521(void **state) {
     f(client, ecdsa_521_default,  cmd,  setup_ecdsa_521,  teardown)
 #endif
 
+#define PKDTESTS_DEFAULT_OPENSSHONLY(f, client, cmd) \
+    /* Default passes by server key type. */ \
+    f(client, ed25519_default,    cmd,  setup_ed25519,    teardown)
+
 #ifdef HAVE_DSA
 #define PKDTESTS_KEX(f, client, kexcmd) \
     /* Kex algorithms. */ \
     f(client, rsa_curve25519_sha256,                  kexcmd("curve25519-sha256"),             setup_rsa,        teardown) \
     f(client, rsa_curve25519_sha256_libssh_org,       kexcmd("curve25519-sha256@libssh.org"),  setup_rsa,        teardown) \
-    f(client, rsa_ecdh_sha2_nistp256,                 kexcmd("ecdh-sha2-nistp256 "),           setup_rsa,        teardown) \
-    f(client, rsa_ecdh_sha2_nistp384,                 kexcmd("ecdh-sha2-nistp384 "),           setup_rsa,        teardown) \
-    f(client, rsa_ecdh_sha2_nistp521,                 kexcmd("ecdh-sha2-nistp521 "),           setup_rsa,        teardown) \
+    f(client, rsa_ecdh_sha2_nistp256,                 kexcmd("ecdh-sha2-nistp256"),            setup_rsa,        teardown) \
+    f(client, rsa_ecdh_sha2_nistp384,                 kexcmd("ecdh-sha2-nistp384"),            setup_rsa,        teardown) \
+    f(client, rsa_ecdh_sha2_nistp521,                 kexcmd("ecdh-sha2-nistp521"),            setup_rsa,        teardown) \
     f(client, rsa_diffie_hellman_group14_sha1,        kexcmd("diffie-hellman-group14-sha1"),   setup_rsa,        teardown) \
     f(client, rsa_diffie_hellman_group1_sha1,         kexcmd("diffie-hellman-group1-sha1"),    setup_rsa,        teardown) \
     f(client, dsa_curve25519_sha256,                  kexcmd("curve25519-sha256"),             setup_dsa,        teardown) \
@@ -222,23 +233,23 @@ static int torture_pkd_setup_ecdsa_521(void **state) {
     f(client, dsa_diffie_hellman_group1_sha1,         kexcmd("diffie-hellman-group1-sha1"),    setup_dsa,        teardown) \
     f(client, ecdsa_256_curve25519_sha256,            kexcmd("curve25519-sha256"),             setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_curve25519_sha256_libssh_org, kexcmd("curve25519-sha256@libssh.org"),  setup_ecdsa_256,  teardown) \
-    f(client, ecdsa_256_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256 "),           setup_ecdsa_256,  teardown) \
-    f(client, ecdsa_256_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384 "),           setup_ecdsa_256,  teardown) \
-    f(client, ecdsa_256_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521 "),           setup_ecdsa_256,  teardown) \
+    f(client, ecdsa_256_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256"),            setup_ecdsa_256,  teardown) \
+    f(client, ecdsa_256_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384"),            setup_ecdsa_256,  teardown) \
+    f(client, ecdsa_256_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521"),            setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_diffie_hellman_group14_sha1,  kexcmd("diffie-hellman-group14-sha1"),   setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_diffie_hellman_group1_sha1,   kexcmd("diffie-hellman-group1-sha1"),    setup_ecdsa_256,  teardown) \
     f(client, ecdsa_384_curve25519_sha256,            kexcmd("curve25519-sha256"),             setup_ecdsa_384,  teardown) \
     f(client, ecdsa_384_curve25519_sha256_libssh_org, kexcmd("curve25519-sha256@libssh.org"),  setup_ecdsa_384,  teardown) \
-    f(client, ecdsa_384_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256 "),           setup_ecdsa_384,  teardown) \
-    f(client, ecdsa_384_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384 "),           setup_ecdsa_384,  teardown) \
-    f(client, ecdsa_384_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521 "),           setup_ecdsa_384,  teardown) \
+    f(client, ecdsa_384_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256"),            setup_ecdsa_384,  teardown) \
+    f(client, ecdsa_384_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384"),            setup_ecdsa_384,  teardown) \
+    f(client, ecdsa_384_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521"),            setup_ecdsa_384,  teardown) \
     f(client, ecdsa_384_diffie_hellman_group14_sha1,  kexcmd("diffie-hellman-group14-sha1"),   setup_ecdsa_384,  teardown) \
     f(client, ecdsa_384_diffie_hellman_group1_sha1,   kexcmd("diffie-hellman-group1-sha1"),    setup_ecdsa_384,  teardown) \
     f(client, ecdsa_521_curve25519_sha256,            kexcmd("curve25519-sha256"),             setup_ecdsa_521,  teardown) \
     f(client, ecdsa_521_curve25519_sha256_libssh_org, kexcmd("curve25519-sha256@libssh.org"),  setup_ecdsa_521,  teardown) \
-    f(client, ecdsa_521_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256 "),           setup_ecdsa_521,  teardown) \
-    f(client, ecdsa_521_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384 "),           setup_ecdsa_521,  teardown) \
-    f(client, ecdsa_521_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521 "),           setup_ecdsa_521,  teardown) \
+    f(client, ecdsa_521_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256"),            setup_ecdsa_521,  teardown) \
+    f(client, ecdsa_521_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384"),            setup_ecdsa_521,  teardown) \
+    f(client, ecdsa_521_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521"),            setup_ecdsa_521,  teardown) \
     f(client, ecdsa_521_diffie_hellman_group14_sha1,  kexcmd("diffie-hellman-group14-sha1"),   setup_ecdsa_521,  teardown) \
     f(client, ecdsa_521_diffie_hellman_group1_sha1,   kexcmd("diffie-hellman-group1-sha1"),    setup_ecdsa_521,  teardown)
 #else
@@ -246,24 +257,55 @@ static int torture_pkd_setup_ecdsa_521(void **state) {
     /* Kex algorithms. */ \
     f(client, rsa_curve25519_sha256,                  kexcmd("curve25519-sha256"),             setup_rsa,        teardown) \
     f(client, rsa_curve25519_sha256_libssh_org,       kexcmd("curve25519-sha256@libssh.org"),  setup_rsa,        teardown) \
-    f(client, rsa_ecdh_sha2_nistp256,                 kexcmd("ecdh-sha2-nistp256 "),           setup_rsa,        teardown) \
+    f(client, rsa_ecdh_sha2_nistp256,                 kexcmd("ecdh-sha2-nistp256"),            setup_rsa,        teardown) \
+    f(client, rsa_ecdh_sha2_nistp384,                 kexcmd("ecdh-sha2-nistp384"),            setup_rsa,        teardown) \
+    f(client, rsa_ecdh_sha2_nistp521,                 kexcmd("ecdh-sha2-nistp521"),            setup_rsa,        teardown) \
     f(client, rsa_diffie_hellman_group14_sha1,        kexcmd("diffie-hellman-group14-sha1"),   setup_rsa,        teardown) \
     f(client, rsa_diffie_hellman_group1_sha1,         kexcmd("diffie-hellman-group1-sha1"),    setup_rsa,        teardown) \
     f(client, ecdsa_256_curve25519_sha256,            kexcmd("curve25519-sha256"),             setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_curve25519_sha256_libssh_org, kexcmd("curve25519-sha256@libssh.org"),  setup_ecdsa_256,  teardown) \
-    f(client, ecdsa_256_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256 "),           setup_ecdsa_256,  teardown) \
+    f(client, ecdsa_256_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256"),            setup_ecdsa_256,  teardown) \
+    f(client, ecdsa_256_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384"),            setup_ecdsa_256,  teardown) \
+    f(client, ecdsa_256_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521"),            setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_diffie_hellman_group14_sha1,  kexcmd("diffie-hellman-group14-sha1"),   setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_diffie_hellman_group1_sha1,   kexcmd("diffie-hellman-group1-sha1"),    setup_ecdsa_256,  teardown) \
     f(client, ecdsa_384_curve25519_sha256,            kexcmd("curve25519-sha256"),             setup_ecdsa_384,  teardown) \
     f(client, ecdsa_384_curve25519_sha256_libssh_org, kexcmd("curve25519-sha256@libssh.org"),  setup_ecdsa_384,  teardown) \
-    f(client, ecdsa_384_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256 "),           setup_ecdsa_384,  teardown) \
+    f(client, ecdsa_384_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256"),            setup_ecdsa_384,  teardown) \
+    f(client, ecdsa_384_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384"),            setup_ecdsa_384,  teardown) \
+    f(client, ecdsa_384_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521"),            setup_ecdsa_384,  teardown) \
     f(client, ecdsa_384_diffie_hellman_group14_sha1,  kexcmd("diffie-hellman-group14-sha1"),   setup_ecdsa_384,  teardown) \
     f(client, ecdsa_384_diffie_hellman_group1_sha1,   kexcmd("diffie-hellman-group1-sha1"),    setup_ecdsa_384,  teardown) \
     f(client, ecdsa_521_curve25519_sha256,            kexcmd("curve25519-sha256"),             setup_ecdsa_521,  teardown) \
     f(client, ecdsa_521_curve25519_sha256_libssh_org, kexcmd("curve25519-sha256@libssh.org"),  setup_ecdsa_521,  teardown) \
-    f(client, ecdsa_521_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256 "),           setup_ecdsa_521,  teardown) \
+    f(client, ecdsa_521_ecdh_sha2_nistp256,           kexcmd("ecdh-sha2-nistp256"),            setup_ecdsa_521,  teardown) \
+    f(client, ecdsa_521_ecdh_sha2_nistp384,           kexcmd("ecdh-sha2-nistp384"),            setup_ecdsa_521,  teardown) \
+    f(client, ecdsa_521_ecdh_sha2_nistp521,           kexcmd("ecdh-sha2-nistp521"),            setup_ecdsa_521,  teardown) \
     f(client, ecdsa_521_diffie_hellman_group14_sha1,  kexcmd("diffie-hellman-group14-sha1"),   setup_ecdsa_521,  teardown) \
     f(client, ecdsa_521_diffie_hellman_group1_sha1,   kexcmd("diffie-hellman-group1-sha1"),    setup_ecdsa_521,  teardown)
+#endif
+
+
+#ifdef HAVE_DSA
+#define PKDTESTS_KEX_OPENSSHONLY(f, client, kexcmd) \
+    /* Kex algorithms. */ \
+    f(client, ed25519_curve25519_sha256,              kexcmd("curve25519-sha256"),             setup_ed25519,    teardown) \
+    f(client, ed25519_curve25519_sha256_libssh_org,   kexcmd("curve25519-sha256@libssh.org"),  setup_ed25519,    teardown) \
+    f(client, ed25519_ecdh_sha2_nistp256,             kexcmd("ecdh-sha2-nistp256"),            setup_ed25519,    teardown) \
+    f(client, ed25519_ecdh_sha2_nistp384,             kexcmd("ecdh-sha2-nistp384"),            setup_ed25519,    teardown) \
+    f(client, ed25519_ecdh_sha2_nistp521,             kexcmd("ecdh-sha2-nistp521"),            setup_ed25519,    teardown) \
+    f(client, ed25519_diffie_hellman_group14_sha1,    kexcmd("diffie-hellman-group14-sha1"),   setup_ed25519,    teardown) \
+    f(client, ed25519_diffie_hellman_group1_sha1,     kexcmd("diffie-hellman-group1-sha1"),    setup_ed25519,    teardown)
+#else
+#define PKDTESTS_KEX_OPENSSHONLY(f, client, kexcmd) \
+    /* Kex algorithms. */ \
+    f(client, ed25519_curve25519_sha256,              kexcmd("curve25519-sha256"),             setup_ed25519,    teardown) \
+    f(client, ed25519_curve25519_sha256_libssh_org,   kexcmd("curve25519-sha256@libssh.org"),  setup_ed25519,    teardown) \
+    f(client, ed25519_ecdh_sha2_nistp256,             kexcmd("ecdh-sha2-nistp256"),            setup_ed25519,    teardown) \
+    f(client, ed25519_ecdh_sha2_nistp384,             kexcmd("ecdh-sha2-nistp384"),            setup_ed25519,    teardown) \
+    f(client, ed25519_ecdh_sha2_nistp521,             kexcmd("ecdh-sha2-nistp521"),            setup_ed25519,    teardown) \
+    f(client, ed25519_diffie_hellman_group14_sha1,    kexcmd("diffie-hellman-group14-sha1"),   setup_ed25519,    teardown) \
+    f(client, ed25519_diffie_hellman_group1_sha1,     kexcmd("diffie-hellman-group1-sha1"),    setup_ed25519,    teardown)
 #endif
 
 #ifdef HAVE_DSA
@@ -330,6 +372,14 @@ static int torture_pkd_setup_ecdsa_521(void **state) {
     f(client, dsa_aes192_cbc,          ciphercmd("aes192-cbc"),    setup_dsa,        teardown) \
     f(client, dsa_aes192_ctr,          ciphercmd("aes192-ctr"),    setup_dsa,        teardown) \
     f(client, dsa_chacha20,            ciphercmd(CHACHA20),        setup_dsa,        teardown) \
+    f(client, ed25519_3des_cbc,        ciphercmd("3des-cbc"),      setup_ed25519,    teardown) \
+    f(client, ed25519_aes128_cbc,      ciphercmd("aes128-cbc"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes128_ctr,      ciphercmd("aes128-ctr"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes256_cbc,      ciphercmd("aes256-cbc"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes256_ctr,      ciphercmd("aes256-ctr"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes192_cbc,      ciphercmd("aes192-cbc"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes192_ctr,      ciphercmd("aes192-ctr"),    setup_ed25519,    teardown) \
+    f(client, ed25519_chacha20,        ciphercmd(CHACHA20),        setup_ed25519,    teardown) \
     f(client, ecdsa_256_aes192_cbc,    ciphercmd("aes192-cbc"),    setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_aes192_ctr,    ciphercmd("aes192-ctr"),    setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_chacha20,      ciphercmd(CHACHA20),        setup_ecdsa_256,  teardown) \
@@ -345,6 +395,14 @@ static int torture_pkd_setup_ecdsa_521(void **state) {
     f(client, rsa_aes192_cbc,          ciphercmd("aes192-cbc"),    setup_rsa,        teardown) \
     f(client, rsa_aes192_ctr,          ciphercmd("aes192-ctr"),    setup_rsa,        teardown) \
     f(client, rsa_chacha20,            ciphercmd(CHACHA20),        setup_rsa,        teardown) \
+    f(client, ed25519_3des_cbc,        ciphercmd("3des-cbc"),      setup_ed25519,    teardown) \
+    f(client, ed25519_aes128_cbc,      ciphercmd("aes128-cbc"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes128_ctr,      ciphercmd("aes128-ctr"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes256_cbc,      ciphercmd("aes256-cbc"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes256_ctr,      ciphercmd("aes256-ctr"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes192_cbc,      ciphercmd("aes192-cbc"),    setup_ed25519,    teardown) \
+    f(client, ed25519_aes192_ctr,      ciphercmd("aes192-ctr"),    setup_ed25519,    teardown) \
+    f(client, ed25519_chacha20,        ciphercmd(CHACHA20),        setup_ed25519,    teardown) \
     f(client, ecdsa_256_aes192_cbc,    ciphercmd("aes192-cbc"),    setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_aes192_ctr,    ciphercmd("aes192-ctr"),    setup_ecdsa_256,  teardown) \
     f(client, ecdsa_256_chacha20,      ciphercmd(CHACHA20),        setup_ecdsa_256,  teardown) \
@@ -370,8 +428,11 @@ static int torture_pkd_setup_ecdsa_521(void **state) {
     f(client, ecdsa_384_hmac_sha2_256,  maccmd("hmac-sha2-256"),  setup_ecdsa_384,  teardown) \
     f(client, ecdsa_521_hmac_sha2_256,  maccmd("hmac-sha2-256"),  setup_ecdsa_521,  teardown)
 #define PKDTESTS_MAC_OPENSSHONLY(f, client, maccmd) \
+    f(client, ed25519_hmac_sha1,        maccmd("hmac-sha1"),      setup_ed25519,    teardown) \
+    f(client, ed25519_hmac_sha2_256,    maccmd("hmac-sha2-256"),  setup_ed25519,    teardown) \
     f(client, rsa_hmac_sha2_512,        maccmd("hmac-sha2-512"),  setup_rsa,        teardown) \
     f(client, dsa_hmac_sha2_512,        maccmd("hmac-sha2-512"),  setup_dsa,        teardown) \
+    f(client, ed25519_hmac_sha2_512,    maccmd("hmac-sha2-512"),  setup_ed25519,    teardown) \
     f(client, ecdsa_256_hmac_sha2_512,  maccmd("hmac-sha2-512"),  setup_ecdsa_256,  teardown) \
     f(client, ecdsa_384_hmac_sha2_512,  maccmd("hmac-sha2-512"),  setup_ecdsa_384,  teardown) \
     f(client, ecdsa_521_hmac_sha2_512,  maccmd("hmac-sha2-512"),  setup_ecdsa_521,  teardown)
@@ -387,7 +448,10 @@ static int torture_pkd_setup_ecdsa_521(void **state) {
     f(client, ecdsa_384_hmac_sha2_256,  maccmd("hmac-sha2-256"),  setup_ecdsa_384,  teardown) \
     f(client, ecdsa_521_hmac_sha2_256,  maccmd("hmac-sha2-256"),  setup_ecdsa_521,  teardown)
 #define PKDTESTS_MAC_OPENSSHONLY(f, client, maccmd) \
+    f(client, ed25519_hmac_sha1,        maccmd("hmac-sha1"),      setup_ed25519,    teardown) \
+    f(client, ed25519_hmac_sha2_256,    maccmd("hmac-sha2-256"),  setup_ed25519,    teardown) \
     f(client, rsa_hmac_sha2_512,        maccmd("hmac-sha2-512"),  setup_rsa,        teardown) \
+    f(client, ed25519_hmac_sha2_512,    maccmd("hmac-sha2-512"),  setup_ed25519,    teardown) \
     f(client, ecdsa_256_hmac_sha2_512,  maccmd("hmac-sha2-512"),  setup_ecdsa_256,  teardown) \
     f(client, ecdsa_384_hmac_sha2_512,  maccmd("hmac-sha2-512"),  setup_ecdsa_384,  teardown) \
     f(client, ecdsa_521_hmac_sha2_512,  maccmd("hmac-sha2-512"),  setup_ecdsa_521,  teardown)
@@ -441,7 +505,9 @@ static void torture_pkd_runtest(const char *testname,
 #ifdef HAVE_DSA
 #define CLIENT_ID_FILE OPENSSH_DSA_TESTKEY
 PKDTESTS_DEFAULT(emit_keytest, openssh_dsa, OPENSSH_CMD)
+PKDTESTS_DEFAULT_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_CMD)
 PKDTESTS_KEX(emit_keytest, openssh_dsa, OPENSSH_KEX_CMD)
+PKDTESTS_KEX_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_KEX_CMD)
 PKDTESTS_CIPHER(emit_keytest, openssh_dsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_CIPHER_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_MAC(emit_keytest, openssh_dsa, OPENSSH_MAC_CMD)
@@ -451,7 +517,9 @@ PKDTESTS_MAC_OPENSSHONLY(emit_keytest, openssh_dsa, OPENSSH_MAC_CMD)
 
 #define CLIENT_ID_FILE OPENSSH_RSA_TESTKEY
 PKDTESTS_DEFAULT(emit_keytest, openssh_rsa, OPENSSH_CMD)
+PKDTESTS_DEFAULT_OPENSSHONLY(emit_keytest, openssh_rsa, OPENSSH_CMD)
 PKDTESTS_KEX(emit_keytest, openssh_rsa, OPENSSH_KEX_CMD)
+PKDTESTS_KEX_OPENSSHONLY(emit_keytest, openssh_rsa, OPENSSH_KEX_CMD)
 PKDTESTS_CIPHER(emit_keytest, openssh_rsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_CIPHER_OPENSSHONLY(emit_keytest, openssh_rsa, OPENSSH_CIPHER_CMD)
 PKDTESTS_MAC(emit_keytest, openssh_rsa, OPENSSH_MAC_CMD)
@@ -460,7 +528,9 @@ PKDTESTS_MAC_OPENSSHONLY(emit_keytest, openssh_rsa, OPENSSH_MAC_CMD)
 
 #define CLIENT_ID_FILE OPENSSH_ECDSA256_TESTKEY
 PKDTESTS_DEFAULT(emit_keytest, openssh_e256, OPENSSH_CMD)
+PKDTESTS_DEFAULT_OPENSSHONLY(emit_keytest, openssh_e256, OPENSSH_CMD)
 PKDTESTS_KEX(emit_keytest, openssh_e256, OPENSSH_KEX_CMD)
+PKDTESTS_KEX_OPENSSHONLY(emit_keytest, openssh_e256, OPENSSH_KEX_CMD)
 PKDTESTS_CIPHER(emit_keytest, openssh_e256, OPENSSH_CIPHER_CMD)
 PKDTESTS_CIPHER_OPENSSHONLY(emit_keytest, openssh_e256, OPENSSH_CIPHER_CMD)
 PKDTESTS_MAC(emit_keytest, openssh_e256, OPENSSH_MAC_CMD)
@@ -473,7 +543,9 @@ PKDTESTS_MAC_OPENSSHONLY(emit_keytest, openssh_e256, OPENSSH_MAC_CMD)
 
 #define CLIENT_ID_FILE OPENSSH_ED25519_TESTKEY
 PKDTESTS_DEFAULT(emit_keytest, openssh_ed, OPENSSH_CMD)
+PKDTESTS_DEFAULT_OPENSSHONLY(emit_keytest, openssh_ed, OPENSSH_CMD)
 PKDTESTS_KEX(emit_keytest, openssh_ed, OPENSSH_KEX_CMD)
+PKDTESTS_KEX_OPENSSHONLY(emit_keytest, openssh_ed, OPENSSH_KEX_CMD)
 PKDTESTS_CIPHER(emit_keytest, openssh_ed, OPENSSH_CIPHER_CMD)
 PKDTESTS_CIPHER_OPENSSHONLY(emit_keytest, openssh_ed, OPENSSH_CIPHER_CMD)
 PKDTESTS_MAC(emit_keytest, openssh_ed, OPENSSH_MAC_CMD)
@@ -511,7 +583,9 @@ struct {
     /* OpenSSH */
 #ifdef HAVE_DSA
     PKDTESTS_DEFAULT(emit_testmap, openssh_dsa, OPENSSH_CMD)
+    PKDTESTS_DEFAULT_OPENSSHONLY(emit_testmap, openssh_dsa, OPENSSH_CMD)
     PKDTESTS_KEX(emit_testmap, openssh_dsa, OPENSSH_KEX_CMD)
+    PKDTESTS_KEX_OPENSSHONLY(emit_testmap, openssh_dsa, OPENSSH_KEX_CMD)
     PKDTESTS_CIPHER(emit_testmap, openssh_dsa, OPENSSH_CIPHER_CMD)
     PKDTESTS_CIPHER_OPENSSHONLY(emit_testmap, openssh_dsa, OPENSSH_CIPHER_CMD)
     PKDTESTS_MAC(emit_testmap, openssh_dsa, OPENSSH_MAC_CMD)
@@ -519,21 +593,27 @@ struct {
 #endif
 
     PKDTESTS_DEFAULT(emit_testmap, openssh_rsa, OPENSSH_CMD)
+    PKDTESTS_DEFAULT_OPENSSHONLY(emit_testmap, openssh_rsa, OPENSSH_CMD)
     PKDTESTS_KEX(emit_testmap, openssh_rsa, OPENSSH_KEX_CMD)
+    PKDTESTS_KEX_OPENSSHONLY(emit_testmap, openssh_rsa, OPENSSH_KEX_CMD)
     PKDTESTS_CIPHER(emit_testmap, openssh_rsa, OPENSSH_CIPHER_CMD)
     PKDTESTS_CIPHER_OPENSSHONLY(emit_testmap, openssh_rsa, OPENSSH_CIPHER_CMD)
     PKDTESTS_MAC(emit_testmap, openssh_rsa, OPENSSH_MAC_CMD)
     PKDTESTS_MAC_OPENSSHONLY(emit_testmap, openssh_rsa, OPENSSH_MAC_CMD)
 
     PKDTESTS_DEFAULT(emit_testmap, openssh_e256, OPENSSH_CMD)
+    PKDTESTS_DEFAULT_OPENSSHONLY(emit_testmap, openssh_e256, OPENSSH_CMD)
     PKDTESTS_KEX(emit_testmap, openssh_e256, OPENSSH_KEX_CMD)
+    PKDTESTS_KEX_OPENSSHONLY(emit_testmap, openssh_e256, OPENSSH_KEX_CMD)
     PKDTESTS_CIPHER(emit_testmap, openssh_e256, OPENSSH_CIPHER_CMD)
     PKDTESTS_CIPHER_OPENSSHONLY(emit_testmap, openssh_e256, OPENSSH_CIPHER_CMD)
     PKDTESTS_MAC(emit_testmap, openssh_e256, OPENSSH_MAC_CMD)
     PKDTESTS_MAC_OPENSSHONLY(emit_testmap, openssh_e256, OPENSSH_MAC_CMD)
 
     PKDTESTS_DEFAULT(emit_testmap, openssh_ed, OPENSSH_CMD)
+    PKDTESTS_DEFAULT_OPENSSHONLY(emit_testmap, openssh_ed, OPENSSH_CMD)
     PKDTESTS_KEX(emit_testmap, openssh_ed, OPENSSH_KEX_CMD)
+    PKDTESTS_KEX_OPENSSHONLY(emit_testmap, openssh_ed, OPENSSH_KEX_CMD)
     PKDTESTS_CIPHER(emit_testmap, openssh_ed, OPENSSH_CIPHER_CMD)
     PKDTESTS_CIPHER_OPENSSHONLY(emit_testmap, openssh_ed, OPENSSH_CIPHER_CMD)
     PKDTESTS_MAC(emit_testmap, openssh_ed, OPENSSH_MAC_CMD)
@@ -562,6 +642,7 @@ static int pkd_run_tests(void) {
     const struct CMUnitTest openssh_tests[] = {
 #ifdef HAVE_DSA
         PKDTESTS_DEFAULT(emit_unit_test_comma, openssh_dsa, OPENSSH_CMD)
+        PKDTESTS_DEFAULT_OPENSSHONLY(emit_unit_test_comma, openssh_dsa, OPENSSH_CMD)
         PKDTESTS_KEX(emit_unit_test_comma, openssh_dsa, OPENSSH_KEX_CMD)
         PKDTESTS_CIPHER(emit_unit_test_comma, openssh_dsa, OPENSSH_CIPHER_CMD)
         PKDTESTS_CIPHER_OPENSSHONLY(emit_unit_test_comma, openssh_dsa, OPENSSH_CIPHER_CMD)
@@ -570,6 +651,7 @@ static int pkd_run_tests(void) {
 #endif
 
         PKDTESTS_DEFAULT(emit_unit_test_comma, openssh_rsa, OPENSSH_CMD)
+        PKDTESTS_DEFAULT_OPENSSHONLY(emit_unit_test_comma, openssh_rsa, OPENSSH_CMD)
         PKDTESTS_KEX(emit_unit_test_comma, openssh_rsa, OPENSSH_KEX_CMD)
         PKDTESTS_CIPHER(emit_unit_test_comma, openssh_rsa, OPENSSH_CIPHER_CMD)
         PKDTESTS_CIPHER_OPENSSHONLY(emit_unit_test_comma, openssh_rsa, OPENSSH_CIPHER_CMD)
@@ -577,6 +659,7 @@ static int pkd_run_tests(void) {
         PKDTESTS_MAC_OPENSSHONLY(emit_unit_test_comma, openssh_rsa, OPENSSH_MAC_CMD)
 
         PKDTESTS_DEFAULT(emit_unit_test_comma, openssh_e256, OPENSSH_CMD)
+        PKDTESTS_DEFAULT_OPENSSHONLY(emit_unit_test_comma, openssh_e256, OPENSSH_CMD)
         PKDTESTS_KEX(emit_unit_test_comma, openssh_e256, OPENSSH_KEX_CMD)
         PKDTESTS_CIPHER(emit_unit_test_comma, openssh_e256, OPENSSH_CIPHER_CMD)
         PKDTESTS_CIPHER_OPENSSHONLY(emit_unit_test_comma, openssh_e256, OPENSSH_CIPHER_CMD)
@@ -584,6 +667,7 @@ static int pkd_run_tests(void) {
         PKDTESTS_MAC_OPENSSHONLY(emit_unit_test_comma, openssh_e256, OPENSSH_MAC_CMD)
 
         PKDTESTS_DEFAULT(emit_unit_test_comma, openssh_ed, OPENSSH_CMD)
+        PKDTESTS_DEFAULT_OPENSSHONLY(emit_unit_test_comma, openssh_ed, OPENSSH_CMD)
         PKDTESTS_KEX(emit_unit_test_comma, openssh_ed, OPENSSH_KEX_CMD)
         PKDTESTS_CIPHER(emit_unit_test_comma, openssh_ed, OPENSSH_CIPHER_CMD)
         PKDTESTS_CIPHER_OPENSSHONLY(emit_unit_test_comma, openssh_ed, OPENSSH_CIPHER_CMD)
@@ -674,6 +758,7 @@ static int pkd_run_tests(void) {
 
     /* Clean up any server keys that were generated. */
     cleanup_rsa_key();
+    cleanup_ed25519_key();
 #ifdef HAVE_DSA
     cleanup_dsa_key();
 #endif

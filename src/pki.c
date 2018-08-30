@@ -80,6 +80,8 @@ enum ssh_keytypes_e pki_privatekey_type_from_string(const char *privkey) {
     return SSH_KEYTYPE_UNKNOWN;
 }
 
+extern const char *default_methods[];
+
 /**
  * @brief returns the ECDSA key name ("ecdsa-sha2-nistp256" for example)
  *
@@ -194,6 +196,27 @@ enum ssh_keytypes_e ssh_key_type(const ssh_key key){
 }
 
 /**
+ * @brief Convert a key algorithm type to a string.
+ *
+ * @param[in]  type     The algorithm type to convert.
+ *
+ * @return              A string for the keytype or NULL if unknown.
+ */
+const char *ssh_key_algorithm_to_char(enum ssh_keytypes_e type) {
+    switch (type) {
+    case SSH_KEYTYPE_RSA_SHA256:
+        return "rsa-sha2-256";
+    case SSH_KEYTYPE_RSA_SHA512:
+        return "rsa-sha2-512";
+    default:
+        return ssh_key_type_to_char(type);
+    }
+
+    /* We should never reach this */
+    return NULL;
+}
+
+/**
  * @brief Convert a key type to a string.
  *
  * @param[in]  type     The type to convert.
@@ -215,12 +238,91 @@ const char *ssh_key_type_to_char(enum ssh_keytypes_e type) {
     case SSH_KEYTYPE_RSA_CERT01:
       return "ssh-rsa-cert-v01@openssh.com";
     case SSH_KEYTYPE_RSA1:
+    case SSH_KEYTYPE_RSA_SHA256:
+    case SSH_KEYTYPE_RSA_SHA512:
     case SSH_KEYTYPE_UNKNOWN:
       return NULL;
   }
 
   /* We should never reach this */
   return NULL;
+}
+
+/**
+ * @brief Checks the given key against the configured allowed
+ * public key algorithm types
+ *
+ * @param[in] session The SSH session
+ * @parma[in] type    The key algorithm to check
+ * @returns           1 if the key algorithm is allowed 0 otherwise
+ */
+int ssh_key_algorithm_allowed(ssh_session session, const char *type)
+{
+    const char *allowed_list;
+
+    allowed_list = session->opts.pubkey_accepted_types;
+    if (allowed_list == NULL)
+        allowed_list = default_methods[SSH_HOSTKEYS];
+
+    SSH_LOG(SSH_LOG_DEBUG, "Checking %s with list <%s>", type, allowed_list);
+    return ssh_match_group(allowed_list, type);
+}
+
+/**
+ * @brief Convert a key type to a pubkey algorithm type. This is usually
+ * the same as public key type, unless the SHA2 extension (RFC 8332) is
+ * negotiated during key exchange
+ *
+ * @param[in]  session  SSH Session.
+ *
+ * @param[in]  type     The type to convert.
+ *
+ * @return              A public key algorithm to be used.
+ */
+enum ssh_keytypes_e ssh_key_type_to_algorithm(ssh_session session,
+                                              enum ssh_keytypes_e type)
+{
+    switch (type) {
+    case SSH_KEYTYPE_RSA:
+        if (ssh_key_algorithm_allowed(session, "rsa-sha2-512") &&
+            (session->extensions & SSH_EXT_SIG_RSA_SHA512)) {
+            return SSH_KEYTYPE_RSA_SHA512;
+        }
+
+        if (ssh_key_algorithm_allowed(session, "rsa-sha2-256") &&
+            (session->extensions & SSH_EXT_SIG_RSA_SHA256)) {
+            return SSH_KEYTYPE_RSA_SHA256;
+        }
+        FALL_THROUGH;
+    default:
+        /* Other key types match the signature algorithm */
+        return type;
+    }
+
+    /* We should never reach this */
+    return SSH_KEYTYPE_UNKNOWN;
+}
+
+/**
+ * @brief Convert a ssh key algorithm name to a ssh key algorithm type.
+ *
+ * @param[in] name      The name to convert.
+ *
+ * @return              The enum ssh key algorithm type.
+ */
+static enum ssh_keytypes_e ssh_key_algorithm_type_from_name(const char *name) {
+    if (name == NULL) {
+        return SSH_KEYTYPE_UNKNOWN;
+    }
+
+    if (strcmp(name, "rsa-sha2-256") == 0) {
+        return SSH_KEYTYPE_RSA_SHA256;
+    } else if (strcmp(name, "rsa-sha2-512") == 0) {
+        return SSH_KEYTYPE_RSA_SHA512;
+    }
+
+    /* Otherwise the signature algorithm matches the key type */
+    return ssh_key_type_from_name(name);
 }
 
 /**
@@ -239,7 +341,9 @@ enum ssh_keytypes_e ssh_key_type_from_name(const char *name) {
         return SSH_KEYTYPE_RSA;
     } else if (strcmp(name, "dsa") == 0) {
         return SSH_KEYTYPE_DSS;
-    } else if (strcmp(name, "ssh-rsa") == 0) {
+    } else if (strcmp(name, "ssh-rsa") == 0
+            || strcmp(name, "rsa-sha2-256") == 0
+            || strcmp(name, "rsa-sha2-512") == 0) {
         return SSH_KEYTYPE_RSA;
     } else if (strcmp(name, "ssh-dss") == 0) {
         return SSH_KEYTYPE_DSS;
@@ -356,6 +460,8 @@ void ssh_signature_free(ssh_signature sig)
 #endif
             break;
         case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_RSA_SHA256:
+        case SSH_KEYTYPE_RSA_SHA512:
 #ifdef HAVE_LIBGCRYPT
             gcry_sexp_release(sig->rsa_sig);
 #elif defined HAVE_LIBCRYPTO
@@ -1534,7 +1640,7 @@ int ssh_pki_import_signature_blob(const ssh_string sig_blob,
         return SSH_ERROR;
     }
 
-    type = ssh_key_type_from_name(ssh_string_get_char(str));
+    type = ssh_key_algorithm_type_from_name(ssh_string_get_char(str));
     ssh_string_free(str);
 
     str = ssh_buffer_get_ssh_string(buf);
@@ -1569,7 +1675,7 @@ int ssh_pki_signature_verify_blob(ssh_session session,
 
     SSH_LOG(SSH_LOG_FUNCTIONS,
             "Going to verify a %s type signature",
-            key->type_c);
+            sig->type_c);
 
 
     if (key->type == SSH_KEYTYPE_ECDSA) {
@@ -1593,22 +1699,40 @@ int ssh_pki_signature_verify_blob(ssh_session session,
     } else if (key->type == SSH_KEYTYPE_ED25519) {
         rc = pki_signature_verify(session, sig, key, digest, dlen);
     } else {
-        unsigned char hash[SHA_DIGEST_LEN] = {0};
+        unsigned char hash[SHA512_DIGEST_LEN] = {0};
+        uint32_t hlen = 0;
 
-        sha1(digest, dlen, hash);
+        switch (sig->type) {
+        case SSH_KEYTYPE_RSA_SHA256:
+            sha256(digest, dlen, hash);
+            hlen = SHA256_DIGEST_LEN;
+            break;
+        case SSH_KEYTYPE_RSA_SHA512:
+            sha512(digest, dlen, hash);
+            hlen = SHA512_DIGEST_LEN;
+            break;
+        case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_DSS:
+            sha1(digest, dlen, hash);
+            hlen = SHA_DIGEST_LEN;
+            break;
+        default:
+            SSH_LOG(SSH_LOG_TRACE, "Unknown sig->type: %d", sig->type);
+            return SSH_ERROR;
+        }
 #ifdef DEBUG_CRYPTO
         ssh_print_hexa(key->type == SSH_KEYTYPE_DSS
                        ? "Hash to be verified with DSA"
                        : "Hash to be verified with RSA",
                        hash,
-                       SHA_DIGEST_LEN);
+                       hlen);
 #endif
 
         rc = pki_signature_verify(session,
                                   sig,
                                   key,
                                   hash,
-                                  SHA_DIGEST_LEN);
+                                  hlen);
     }
 
     ssh_signature_free(sig);
@@ -1687,24 +1811,54 @@ ssh_string ssh_pki_do_sign(ssh_session session,
                           ssh_buffer_get_len(buf));
         ssh_buffer_free(buf);
     } else {
-        unsigned char hash[SHA_DIGEST_LEN] = {0};
-        SHACTX ctx;
+        unsigned char hash[SHA512_DIGEST_LEN] = {0};
+        uint32_t hlen = 0;
+        enum ssh_keytypes_e sig_type;
+        ssh_buffer buf;
 
-        ctx = sha1_init();
-        if (ctx == NULL) {
+        buf = ssh_buffer_new();
+        if (buf == NULL) {
             ssh_string_free(session_id);
             return NULL;
         }
 
-        sha1_update(ctx, session_id, ssh_string_len(session_id) + 4);
-        sha1_update(ctx, ssh_buffer_get(sigbuf), ssh_buffer_get_len(sigbuf));
-        sha1_final(hash, ctx);
+        ssh_buffer_set_secure(buf);
+        rc = ssh_buffer_pack(buf,
+                             "SP",
+                             session_id,
+                             ssh_buffer_get_len(sigbuf), ssh_buffer_get(sigbuf));
+        if (rc != SSH_OK) {
+            ssh_string_free(session_id);
+            ssh_buffer_free(buf);
+            return NULL;
+        }
+
+        sig_type = ssh_key_type_to_algorithm(session, privkey->type);
+        switch (sig_type) {
+        case SSH_KEYTYPE_RSA_SHA256:
+            sha256(ssh_buffer_get(buf), ssh_buffer_get_len(buf), hash);
+            hlen = SHA256_DIGEST_LEN;
+            break;
+        case SSH_KEYTYPE_RSA_SHA512:
+            sha512(ssh_buffer_get(buf), ssh_buffer_get_len(buf), hash);
+            hlen = SHA512_DIGEST_LEN;
+            break;
+        case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_DSS:
+            sha1(ssh_buffer_get(buf), ssh_buffer_get_len(buf), hash);
+            hlen = SHA_DIGEST_LEN;
+            break;
+        default:
+            SSH_LOG(SSH_LOG_TRACE, "Unknown sig->type: %d", sig->type);
+            ssh_string_free(session_id);
+            return NULL;
+        }
 
 #ifdef DEBUG_CRYPTO
-        ssh_print_hexa("Hash being signed", hash, SHA_DIGEST_LEN);
+        ssh_print_hexa("Hash being signed", hash, hlen);
 #endif
 
-        sig = pki_do_sign(privkey, hash, SHA_DIGEST_LEN);
+        sig = pki_do_sign_alg(privkey, hash, hlen, sig_type);
     }
     ssh_string_free(session_id);
     if (sig == NULL) {
@@ -1827,21 +1981,36 @@ ssh_string ssh_srv_pki_do_sign_sessionid(ssh_session session,
             sig = NULL;
         }
     } else {
-        unsigned char hash[SHA_DIGEST_LEN] = {0};
-        SHACTX ctx;
+        unsigned char hash[SHA512_DIGEST_LEN] = {0};
+        uint32_t hlen = 0;
+        enum ssh_keytypes_e sig_type;
 
-        ctx = sha1_init();
-        if (ctx == NULL) {
+        sig_type = ssh_key_type_to_algorithm(session, privkey->type);
+        switch (sig_type) {
+        case SSH_KEYTYPE_RSA_SHA256:
+            sha256(crypto->secret_hash, crypto->digest_len, hash);
+            hlen = SHA256_DIGEST_LEN;
+            break;
+        case SSH_KEYTYPE_RSA_SHA512:
+            sha512(crypto->secret_hash, crypto->digest_len, hash);
+            hlen = SHA512_DIGEST_LEN;
+            break;
+        case SSH_KEYTYPE_RSA:
+        case SSH_KEYTYPE_DSS:
+            sha1(crypto->secret_hash, crypto->digest_len, hash);
+            hlen = SHA_DIGEST_LEN;
+            break;
+        default:
+            SSH_LOG(SSH_LOG_TRACE, "Unknown sig->type: %d", sig->type);
             return NULL;
         }
-        sha1_update(ctx, crypto->secret_hash, crypto->digest_len);
-        sha1_final(hash, ctx);
+
 
 #ifdef DEBUG_CRYPTO
-        ssh_print_hexa("Hash being signed", hash, SHA_DIGEST_LEN);
+        ssh_print_hexa("Hash being signed", hash, hlen);
 #endif
 
-        sig = pki_do_sign_sessionid(privkey, hash, SHA_DIGEST_LEN);
+        sig = pki_do_sign_sessionid_alg(privkey, hash, hlen, sig_type);
         if (sig == NULL) {
             return NULL;
         }
