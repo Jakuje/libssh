@@ -353,6 +353,8 @@ static int aes_set_key(struct ssh_cipher_struct *cipher, void *key, void *IV) {
     }
     if(strstr(cipher->name,"-ctr"))
       mode=GCRY_CIPHER_MODE_CTR;
+    if (strstr(cipher->name, "-gcm"))
+      mode = GCRY_CIPHER_MODE_GCM;
     switch (cipher->keysize) {
       case 128:
         if (gcry_cipher_open(&cipher->key[0], GCRY_CIPHER_AES128,
@@ -386,6 +388,11 @@ static int aes_set_key(struct ssh_cipher_struct *cipher, void *key, void *IV) {
         SAFE_FREE(cipher->key);
         return -1;
       }
+    } else if (mode == GCRY_CIPHER_MODE_GCM) {
+      if (gcry_cipher_setiv(cipher->key[0], IV, 12)) {
+        SAFE_FREE(cipher->key);
+        return -1;
+      }
     } else {
       if(gcry_cipher_setctr(cipher->key[0],IV,16)){
         SAFE_FREE(cipher->key);
@@ -405,6 +412,139 @@ static void aes_encrypt(struct ssh_cipher_struct *cipher, void *in, void *out,
 static void aes_decrypt(struct ssh_cipher_struct *cipher, void *in, void *out,
     unsigned long len) {
   gcry_cipher_decrypt(cipher->key[0], out, len, in, len);
+}
+
+static int aes_aead_get_length(struct ssh_cipher_struct *cipher,
+                               void *in,
+                               uint8_t *out,
+                               size_t len,
+                               uint64_t seq)
+{
+    (void)seq;
+
+    /* The length is not encrypted: Copy it to the result buffer */
+    memcpy(out, in, len);
+
+    return SSH_OK;
+}
+static void aes_aead_encrypt(struct ssh_cipher_struct *cipher,
+                             void *in,
+                             void *out,
+                             size_t len,
+                             uint8_t *tag,
+                             uint64_t seq)
+{
+    gpg_error_t err;
+    size_t aadlen, authlen;
+
+    (void)seq;
+
+    aadlen = cipher->lenfield_blocksize;
+    authlen = cipher->tag_size;
+
+    /* increment IV */
+    /* The geniv function is not implemented in gcrypt. */
+    err = gcry_cipher_geniv(cipher->key[0], "???");
+    if (err) {
+        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_geniv failed: %s",
+                gpg_strerror(err));
+        return;
+    }
+
+    /* Pass the authenticated data (packet_length) */
+    err = gcry_cipher_authenticate(cipher->key[0], in, aadlen);
+    if (err) {
+        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_authenticate failed: %s",
+                gpg_strerror(err));
+        return;
+    }
+    memcpy(out, in, aadlen);
+
+    /* Encrypt the rest of the data */
+    err = gcry_cipher_encrypt(cipher->key[0],
+                              (unsigned char *)out + aadlen,
+                              len - aadlen,
+                              (unsigned char *)in + aadlen,
+                              len - aadlen);
+    if (err) {
+        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_encrypt failed: %s",
+                gpg_strerror(err));
+        return;
+    }
+
+    /* Calculate the tag */
+    ssh_print_hexa("tag0", tag, authlen);
+    err = gcry_cipher_gettag(cipher->key[0],
+                             (void *)tag,
+                             authlen);
+    if (err) {
+        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_gettag failed: %s",
+                gpg_strerror(err));
+        return;
+    }
+
+    ssh_print_hexa("tag1", tag, authlen);
+}
+
+static int aes_aead_decrypt(struct ssh_cipher_struct *cipher,
+                            void *complete_packet,
+                            uint8_t *out,
+                            size_t encrypted_size,
+                            uint64_t seq)
+{
+    gpg_error_t err;
+    size_t aadlen, authlen;
+
+    (void)seq;
+
+    aadlen = cipher->lenfield_blocksize;
+    authlen = cipher->tag_size;
+
+    /* increment IV */
+    /* The geniv function is not implemented in gcrypt. */
+    err = gcry_cipher_geniv(cipher->key[0], "???");
+    if (err) {
+        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_geniv failed: %s",
+                gpg_strerror(err));
+        return;
+    }
+
+    /* Pass the authenticated data (packet_length) */
+    err = gcry_cipher_authenticate(cipher->key[0],
+                                   complete_packet,
+                                   aadlen);
+    if (err) {
+        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_authenticate failed: %s",
+                gpg_strerror(err));
+        return SSH_ERROR;
+    }
+    /* Do not copy the length to the target buffer, because it is already processed */
+    //memcpy(out, complete_packet, aadlen);
+
+    /* Encrypt the rest of the data */
+    err = gcry_cipher_decrypt(cipher->key[0],
+                              out,
+                              encrypted_size,
+                              (unsigned char *)complete_packet + aadlen,
+                              encrypted_size);
+    if (err) {
+        SSH_LOG(SSH_LOG_WARNING, "gcry_cipher_decrypt failed: %s",
+                gpg_strerror(err));
+        return SSH_ERROR;
+    }
+
+    /* Check the tag */
+    err = gcry_cipher_checktag(cipher->key[0],
+                               (unsigned char *)complete_packet + aadlen + encrypted_size,
+                               authlen);
+    if (err == GPG_ERR_CHECKSUM) {
+        SSH_LOG(SSH_LOG_WARNING, "The authentication tag does not match");
+        return SSH_ERROR;
+    } else if (err != GPG_ERR_NO_ERROR) {
+        SSH_LOG(SSH_LOG_WARNING, "General error while decryption");
+        return SSH_ERROR;
+    }
+    return SSH_OK;
 }
 
 static int des3_set_key(struct ssh_cipher_struct *cipher, void *key, void *IV) {
@@ -518,6 +658,34 @@ static struct ssh_cipher_struct ssh_ciphertab[] = {
     .set_decrypt_key = aes_set_key,
     .encrypt     = aes_encrypt,
     .decrypt     = aes_decrypt
+  },
+  {
+    .name            = "aes128-gcm@openssh.com",
+    .blocksize       = 16,
+    .lenfield_blocksize = 4, /* not encrypted, but authenticated */
+    .keylen          = sizeof(gcry_cipher_hd_t),
+    .key             = NULL,
+    .keysize         = 128,
+    .tag_size        = 16,
+    .set_encrypt_key = aes_set_key,
+    .set_decrypt_key = aes_set_key,
+    .aead_encrypt    = aes_aead_encrypt,
+    .aead_decrypt_length = aes_aead_get_length,
+    .aead_decrypt    = aes_aead_decrypt,
+  },
+  {
+    .name            = "aes256-gcm@openssh.com",
+    .blocksize       = 16,
+    .lenfield_blocksize = 4, /* not encrypted, but authenticated */
+    .keylen          = sizeof(gcry_cipher_hd_t),
+    .key             = NULL,
+    .keysize         = 256,
+    .tag_size        = 16,
+    .set_encrypt_key = aes_set_key,
+    .set_decrypt_key = aes_set_key,
+    .aead_encrypt    = aes_aead_encrypt,
+    .aead_decrypt_length = aes_aead_get_length,
+    .aead_decrypt    = aes_aead_decrypt,
   },
   {
     .name            = "3des-cbc",
