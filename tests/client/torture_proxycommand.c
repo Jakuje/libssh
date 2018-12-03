@@ -86,6 +86,23 @@ static void torture_options_set_proxycommand_notexist(void **state) {
     assert_ssh_return_code_equal(session, rc, SSH_ERROR);
 }
 
+static void torture_options_set_proxycommand_ssh(void **state)
+{
+    struct torture_state *s = *state;
+    ssh_session session = s->ssh.session;
+    int rc;
+    socket_t fd;
+
+    rc = ssh_options_set(session, SSH_OPTIONS_PROXYCOMMAND, "ssh -W [%h]:%p alice@127.0.0.10");
+    assert_int_equal(rc, 0);
+    rc = ssh_connect(session);
+    assert_ssh_return_code(session, rc);
+    fd = ssh_get_fd(session);
+    assert_true(fd != SSH_INVALID_SOCKET);
+    rc = fcntl(fd, F_GETFL);
+    assert_int_equal(rc & O_RDWR, O_RDWR);
+}
+
 int torture_run_tests(void) {
     int rc;
     struct CMUnitTest tests[] = {
@@ -93,6 +110,9 @@ int torture_run_tests(void) {
                                         session_setup,
                                         session_teardown),
         cmocka_unit_test_setup_teardown(torture_options_set_proxycommand_notexist,
+                                        session_setup,
+                                        session_teardown),
+        cmocka_unit_test_setup_teardown(torture_options_set_proxycommand_ssh,
                                         session_setup,
                                         session_teardown),
     };
