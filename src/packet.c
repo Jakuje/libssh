@@ -1611,8 +1611,8 @@ static int packet_send2(ssh_session session)
     }
 
     SSH_LOG(SSH_LOG_PACKET,
-            "packet: wrote [len=%d,padding_size=%hhd,comp=%d,payload=%d]",
-            finallen, padding_size, compsize, payloadsize);
+            "packet: wrote [type=%d,len=%d,padding_size=%hhd,comp=%d,payload=%d]",
+            type, finallen, padding_size, compsize, payloadsize);
 
     rc = ssh_buffer_reinit(session->out_buffer);
     if (rc < 0) {
