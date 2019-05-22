@@ -323,7 +323,11 @@ int ssh_key_algorithm_allowed(ssh_session session, const char *type)
     if (session->client) {
         allowed_list = session->opts.pubkey_accepted_types;
         if (allowed_list == NULL) {
-            allowed_list = ssh_kex_get_default_methods(SSH_HOSTKEYS);
+            if (ssh_fips_mode()) {
+                allowed_list = ssh_kex_get_fips_methods(SSH_HOSTKEYS);
+            } else {
+                allowed_list = ssh_kex_get_default_methods(SSH_HOSTKEYS);
+            }
         }
     }
 #ifdef WITH_SERVER
