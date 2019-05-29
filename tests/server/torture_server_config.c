@@ -642,7 +642,7 @@ static void torture_server_config_kex(void **state)
         while(tokens->tokens[j] != NULL) {
             snprintf(config_content,
                     sizeof(config_content),
-                    "HostKey %s\nMACs %s\n",
+                    "HostKey %s\nKexAlgorithms %s\n",
                     hostkey_files[i], tokens->tokens[j]);
 
             rc = try_config_content(state, config_content, true);
