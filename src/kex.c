@@ -173,7 +173,7 @@
                              "aes128-cbc"
 
 #define FIPS_ALLOWED_HOSTKEYS EC_HOSTKEYS \
-                              "rsa-sha2-512,"\
+                              "rsa-sha2-512," \
                               "rsa-sha2-256"
 
 #define FIPS_ALLOWED_PUBLIC_KEY_ALGORITHMS EC_PUBLIC_KEY_ALGORITHMS \
