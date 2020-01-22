@@ -2790,19 +2790,25 @@ int channel_read_buffer(ssh_channel channel, ssh_buffer buffer, uint32_t count,
 }
 
 struct ssh_channel_read_termination_struct {
-  ssh_channel channel;
-  uint32_t count;
-  ssh_buffer buffer;
+    ssh_channel channel;
+    uint32_t count;
+    ssh_buffer buffer;
 };
 
-static int ssh_channel_read_termination(void *s){
-  struct ssh_channel_read_termination_struct *ctx = s;
-  if (ssh_buffer_get_len(ctx->buffer) >= ctx->count ||
-      ctx->channel->remote_eof ||
-      ctx->channel->session->session_state == SSH_SESSION_STATE_ERROR)
-    return 1;
-  else
-    return 0;
+static int
+ssh_channel_read_termination(void *s)
+{
+    struct ssh_channel_read_termination_struct *ctx = s;
+    size_t len;
+
+    len = ssh_buffer_get_len(ctx->buffer);
+    if (len >= ctx->count ||
+        ctx->channel->remote_eof ||
+        ctx->channel->session->session_state == SSH_SESSION_STATE_ERROR) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 /* TODO FIXME Fix the delayed close thing */
